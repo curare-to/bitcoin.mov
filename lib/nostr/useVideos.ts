@@ -2,9 +2,11 @@
 
 import { useSyncExternalStore } from 'react'
 import type { Event } from 'nostr-tools/pure'
+import type { Filter } from 'nostr-tools/filter'
 import { pool } from './pool'
 import { READ_RELAYS, MOVIE_KIND, NAMESPACE_TAG } from './relays'
 import { parseEvent, replaceableKey, type Video } from './schema'
+import { DEFAULT_SCHEMA, schemaAddress } from './schemaEvent'
 
 /* ------------------------------------------------------------------ *
  * The one place a relay subscription lives.
@@ -25,7 +27,7 @@ const EMPTY_SNAPSHOT: VideosSnapshot = { videos: [], loading: true }
 class VideoStore {
   private events = new Map<string, Event>()
   private listeners = new Set<() => void>()
-  private sub: { close(): void } | null = null
+  private subs: { close(): void }[] = []
   private loading = true
   private snapshot: VideosSnapshot = EMPTY_SNAPSHOT
   private flushScheduled = false
@@ -62,20 +64,30 @@ class VideoStore {
   }
 
   private start() {
-    // Guard: exactly one subscription for the app's lifetime (survives
+    // Guard: exactly one set of subscriptions for the app's lifetime (survives
     // React StrictMode's mount/unmount/mount and page navigations).
-    if (this.sub) return
+    if (this.subs.length > 0) return
 
-    this.sub = pool.subscribeMany(
-      [...READ_RELAYS],
+    // Two ways in, because the namespace hashtag is no longer required:
+    // entries that declare the schema by its `a` coordinate are found by that,
+    // and everything published before schemas existed by the legacy `t` tag.
+    // Overlap is free — `upsert` dedupes by replaceable coordinate.
+    const filters: Filter[] = [
       { kinds: [MOVIE_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
-      {
+    ]
+    const address = schemaAddress(DEFAULT_SCHEMA)
+    if (address) {
+      filters.push({ kinds: [MOVIE_KIND], '#a': [address], limit: 500 })
+    }
+
+    this.subs = filters.map((filter) =>
+      pool.subscribeMany([...READ_RELAYS], filter, {
         onevent: (event) => {
           this.upsert(event)
           this.scheduleFlush()
         },
         oneose: () => this.finishLoading(),
-      },
+      }),
     )
 
     // Relays can be flaky and never send EOSE — flip out of loading anyway.

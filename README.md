@@ -35,13 +35,22 @@ kind 31888 is a **custom, addressable application kind** this project defines �
 it is *not* a standardized NIP. It sits in Nostr's addressable/parameterized-
 replaceable range (30000–39999), so the coordinate `(kind, pubkey, d)` is unique
 and republishing with the same `d` **replaces** the previous version. That's how
-an author edits their entry. This client also defends against junk two ways:
+an author edits their entry.
 
-1. **Read scope:** the subscription filters `kind 31888` **and** `#t = bitcoin`,
-   so unrelated traffic can't crowd real entries out of a relay's result window.
-2. **Parse guard:** an event is only shown if it has a non-empty `title` tag.
-   All strings are rendered as text (never HTML), and only `http(s)` URLs are
-   used for links/images (posters must be `https`).
+The event's *shape* isn't hardcoded in this client: it's described by a
+**kind 31889 schema event** (see below). This client defends against junk two
+ways:
+
+1. **Read scope:** entries are found by the schema coordinate they declare
+   (`#a`), and — for entries published before schemas existed — by the legacy
+   `#t = bitcoin` hashtag, so unrelated traffic can't crowd real entries out of
+   a relay's result window.
+2. **Schema verification:** every incoming event is checked against the schema
+   and **rejected** if it doesn't match — no `d`, no `title`, an unknown
+   `type`, an out-of-range `year`, a non-`https` poster, an over-long field, all
+   dropped rather than half-repaired. Run `npm run verify` to see what a relay
+   holds and why anything is being rejected. All strings are rendered as text,
+   never HTML.
 
 ### Shape
 
@@ -52,7 +61,8 @@ an author edits their entry. This client also defends against junk two ways:
   "tags": [
     ["d", "imdb:tt2821314"],                      // REQUIRED — replaceable id
     ["title", "The Rise and Rise of Bitcoin"],    // REQUIRED
-    ["t", "bitcoin"],                             // REQUIRED (namespace)
+    ["t", "bitcoin"],                             // optional discovery hashtag
+    ["a", "31889:<pubkey>:bitcoin.mov"],          // optional — schema followed
     ["year", "2014"],
     ["type", "documentary"],   // movie | documentary | short | interview | series | other
     ["director", "Nicholas Mross"],
@@ -67,14 +77,118 @@ an author edits their entry. This client also defends against junk two ways:
 }
 ```
 
-`d`, `title` and a `t=bitcoin` tag are required; everything else is optional and
-parsed defensively. The `d` identifier defaults to the external id, falling back
-to a `title-year` slug. Duplicate submissions of the same film *by different
-authors* are still collapsed in the UI by external id (`i`), falling back to
-normalized title + year.
+`d`, `title` and `type` are required, plus at least one `r` link; everything
+else is optional. There is **no required namespace tag** — the namespace is the
+schema author's pubkey. The `d` identifier defaults to the external id, falling
+back to a `title-year` slug. Duplicate submissions of the same film *by
+different authors* are still collapsed in the UI by external id (`i`), falling
+back to normalized title + year.
 
-The single source of truth for reading and building these events is
-[`lib/nostr/schema.ts`](lib/nostr/schema.ts).
+[`lib/nostr/schema.ts`](lib/nostr/schema.ts) reads and builds these events;
+what counts as valid lives in the schema event below.
+
+## The kind 31889 schema event
+
+A schema event says which tags an entry may carry, which are required, and what
+to show the user while they fill the form in — so the submit form, the seed
+script and the relay-side verifier all work from one definition instead of three
+copies that drift. Because it lives on a relay, another client can render the
+same form without shipping this repo's code.
+
+```bash
+npm run schema:dry   # print the schema and the event it produces
+npm run schema       # NOSTR_NSEC=nsec1… — publish it
+npm run verify       # check a relay's entries against it
+```
+
+Its author's pubkey **is** the namespace: `31889:<pubkey>:bitcoin.mov` names
+this schema and no other, so nothing global is claimed and nothing can be
+squatted. Kind 31889 is addressable too, so republishing revises it in place.
+
+```jsonc
+{
+  "kind": 31889,
+  "content": "Fields for a bitcoin.mov entry…",   // mirrors the description tag
+  "tags": [
+    ["d", "bitcoin.mov"],       // REQUIRED — schema id
+    ["title", "bitcoin.mov submission"],  // REQUIRED — labels the event
+    ["name", "bitcoin.mov"],    // REQUIRED — the list's identity
+    ["description", "Fields for a bitcoin.mov entry…"],  // REQUIRED
+    ["visibility", "public"],   // REQUIRED — public | private | closed
+    ["picture", "https://…/logo.png"],   // optional — https only
+    ["domain", "bitcoin.mov"],  // optional — REPLACES the name on screen
+    ["k", "31888"],             // the kind this schema governs
+
+    // ["field", name, type, required|optional, placeholder, label, config]
+    ["field", "title", "text", "required", "The Rise and Rise of Bitcoin", "Title", "{\"max\":200}"],
+    ["field", "year", "year", "optional", "2014", "Year", "{\"min\":1900,\"max\":2100}"],
+    ["field", "watchUrl", "url", "optional", "https://youtube.com/watch?v=…", "Watch / reference URL", "{\"tag\":\"r\",\"marker\":\"watch\"}"],
+    // …
+
+    ["require-any", "watchUrl", "imdbUrl"],  // at least one of these
+    ["p", "<pubkey>"]           // extra authors, for closed/private lists
+  ]
+}
+```
+
+### Identity
+
+A schema event says who's publishing the list, not just what its fields are:
+
+| tag | | |
+|---|---|---|
+| `name` | **required** | the list's identity — what people call it |
+| `description` | **required** | what the list is for (≤ 500 chars) |
+| `visibility` | **required** | never guessed; a schema that doesn't say is rejected |
+| `picture` | optional | profile image, https only |
+| `domain` | optional | **replaces the name** wherever the list is shown |
+
+`title` and `name` are both required and usually differ: `title` labels the
+event ("bitcoin.mov submission"), `name` is the publisher ("bitcoin.mov").
+`schemaDisplayName()` returns `domain ?? name`.
+
+A `domain` is a **claim, not proof** — anyone can put any domain in a tag. The
+override exists because a domain is the one part of the identity that *can* be
+checked against the outside world, so confirm it before you trust it:
+
+```ts
+await verifyDomain(schema)  // NIP-05 style: https://<domain>/.well-known/nostr.json?name=_
+```
+
+That's opt-in and network-bound; nothing calls it for you, and the submit form
+presents the name as a label rather than a verified badge. Set one with
+`npm run schema -- --domain=example.com` only if you control it.
+
+`verifySchemaEvent(event)` checks all of the above and returns the violations,
+so publishing tells you exactly which tag is wrong instead of failing blank.
+
+**Field types:** `text`, `longtext`, `token`, `url`, `image`, `enum`, `year`,
+`duration`, `number`. The `config` blob carries everything beyond the four
+positional properties: which `tag` the field writes to (defaults to its name),
+a tag `marker`, `max`/`min`, `enum` `options`, `https`, `repeat`, `pattern`, a
+form `hint`, and `derived` for values the app fills in itself (`d`, `t`).
+
+**Visibility** is enforced by the verifier and by the submit form:
+
+| | who may submit | who may read |
+|---|---|---|
+| `public` | anyone | anyone |
+| `closed` | the schema author + `p` authors | anyone |
+| `private` | the schema author + `p` authors | clients only surface it to those authors |
+
+Relays are open, so `private` is a client-side convention, not encryption —
+never put secrets in one.
+
+`d` and `title` are **always** required on both a submission and a schema
+event: `normalizeSchema` puts them back if a schema event off a relay omits or
+relaxes them, so no schema can opt out of them. On a schema event, `name`,
+`description` and `visibility` are required too.
+
+[`lib/nostr/schemaEvent.ts`](lib/nostr/schemaEvent.ts) is the single source of
+truth for all of this — field definitions, the default schema, `buildSchemaTemplate`,
+`parseSchemaEvent` and `verifySubmission`. It is deliberately dependency-free so
+the Node scripts can import it directly and check against the exact same rules
+the browser does.
 
 ## Notes
 
@@ -84,3 +198,5 @@ The single source of truth for reading and building these events is
   `created_at` across relays.
 - Relays read/written are configured in
   [`lib/nostr/relays.ts`](lib/nostr/relays.ts).
+- **Seeding:** see [SEEDING.md](SEEDING.md). `npm run seed:dry` verifies the
+  whole batch against the schema before anything is signed.

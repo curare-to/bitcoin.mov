@@ -13,6 +13,15 @@ import {
   type SubmitInput,
   type VideoType,
 } from '@/lib/nostr/schema'
+import {
+  DEFAULT_SCHEMA,
+  canSubmit,
+  fieldProps,
+  findField,
+  schemaDisplayName,
+  type SubmissionSchema,
+} from '@/lib/nostr/schemaEvent'
+import { Poster } from '@/components/ui/Poster'
 import { signAndPublish, Nip07Error } from '@/lib/nostr/nip07'
 import { videoStore, useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
@@ -34,7 +43,7 @@ const EMPTY: SubmitInput = {
   description: '',
 }
 
-type Errors = Partial<Record<keyof SubmitInput, string>>
+type Errors = Partial<Record<keyof SubmitInput | 'visibility', string>>
 
 interface Success {
   id: string
@@ -53,6 +62,14 @@ export function SubmitForm() {
   const { availability, pubkey, connect } = useNip07()
   const { videos } = useVideos()
   const editId = useSearchParams().get('edit')
+
+  // The schema event decides which inputs exist, what they're called, what
+  // they suggest, and which are required. Swap this for one fetched off a
+  // relay (parseSchemaEvent) and the form below follows without edits.
+  const schema: SubmissionSchema = DEFAULT_SCHEMA
+  const typeOptions = (findField(schema, 'type')?.config.options ??
+    VIDEO_TYPES) as readonly VideoType[]
+  const blocked = !canSubmit(schema, pubkey)
 
   const [input, setInput] = useState<SubmitInput>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
@@ -97,9 +114,12 @@ export function SubmitForm() {
     e.preventDefault()
     setFormError(null)
 
-    const result = validateInput(input)
+    const result = validateInput(input, schema, { pubkey: pubkey ?? undefined })
     setErrors(result.errors)
-    if (!result.ok) return
+    if (!result.ok) {
+      if (result.errors.visibility) setFormError(result.errors.visibility)
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -109,7 +129,7 @@ export function SubmitForm() {
           'You can only edit entries published by your own key. Signing this will create a new entry instead.',
         )
       }
-      const template = buildTemplate(input, editTarget?.d)
+      const template = buildTemplate(input, editTarget?.d, schema)
       const { signed, accepted, total } = await signAndPublish(template)
       videoStore.pushEvent(signed) // show it immediately
       setSuccess({ id: signed.id, accepted, total })
@@ -166,8 +186,10 @@ export function SubmitForm() {
       <p className="text-[var(--color-muted)] mb-6">
         {editTarget
           ? 'Republishing replaces your existing entry — same address, new version.'
-          : 'Add a Bitcoin movie, documentary or video. It’s published to Nostr as a kind 31888 event, signed by your own key.'}
+          : `Published to Nostr as a kind ${schema.kind} event, signed by your own key.`}
       </p>
+
+      <SchemaIdentity schema={schema} />
 
       <SignerBanner
         availability={availability}
@@ -175,137 +197,173 @@ export function SubmitForm() {
         onConnect={connect}
       />
 
+      {blocked && (
+        <div className="mt-3 rounded-xl border border-yellow-900/50 bg-yellow-950/30 px-4 py-3 text-sm">
+          <p className="font-medium text-yellow-200">
+            This list is {schema.visibility}
+          </p>
+          <p className="text-[var(--color-muted)] mt-1">
+            {pubkey
+              ? 'Your key isn’t on the list of authors allowed to submit to it.'
+              : 'Connect an authorised key to submit an entry.'}
+          </p>
+        </div>
+      )}
+
       <form
         onSubmit={handleSubmit}
-        className={`flex flex-col gap-5 mt-6 ${noSigner ? 'opacity-60' : ''}`}
+        className={`flex flex-col gap-5 mt-6 ${noSigner || blocked ? 'opacity-60' : ''}`}
       >
-        <Field label="Title" required error={errors.title}>
-          <input
-            className={inputCls}
-            value={input.title}
-            onChange={(e) => set('title', e.target.value)}
-            placeholder="The Rise and Rise of Bitcoin"
-          />
+        <Field schema={schema} name="title" error={errors.title}>
+          {(f) => (
+            <input
+              className={inputCls}
+              value={input.title}
+              onChange={(e) => set('title', e.target.value)}
+              placeholder={f.placeholder}
+            />
+          )}
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Type">
-            <select
-              className={inputCls}
-              value={input.type}
-              onChange={(e) => set('type', e.target.value as VideoType)}
-            >
-              {VIDEO_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {typeLabel(t)}
-                </option>
-              ))}
-            </select>
+          <Field schema={schema} name="type" error={errors.type}>
+            {() => (
+              <select
+                className={inputCls}
+                value={input.type}
+                onChange={(e) => set('type', e.target.value as VideoType)}
+              >
+                {typeOptions.map((t) => (
+                  <option key={t} value={t}>
+                    {typeLabel(t)}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
-          <Field label="Year" error={errors.year}>
-            <input
-              className={inputCls}
-              value={input.year}
-              onChange={(e) => set('year', e.target.value)}
-              placeholder="2014"
-              inputMode="numeric"
-            />
+          <Field schema={schema} name="year" error={errors.year}>
+            {(f) => (
+              <input
+                className={inputCls}
+                value={input.year}
+                onChange={(e) => set('year', e.target.value)}
+                placeholder={f.placeholder}
+                inputMode="numeric"
+              />
+            )}
           </Field>
 
-          <Field label="Duration (min)" error={errors.durationSeconds}>
-            <input
-              className={inputCls}
-              value={
-                input.durationSeconds
-                  ? String(Math.round(Number(input.durationSeconds) / 60) || '')
-                  : ''
-              }
-              onChange={(e) => {
-                const mins = Number(e.target.value)
-                set(
-                  'durationSeconds',
-                  Number.isFinite(mins) && mins > 0 ? String(mins * 60) : '',
-                )
-              }}
-              placeholder="96"
-              inputMode="numeric"
-            />
-          </Field>
-        </div>
-
-        <Field label="Watch / reference URL" required error={errors.watchUrl}>
-          <input
-            className={inputCls}
-            value={input.watchUrl}
-            onChange={(e) => set('watchUrl', e.target.value)}
-            placeholder="https://youtube.com/watch?v=…"
-          />
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="IMDb URL" error={errors.imdbUrl}>
-            <input
-              className={inputCls}
-              value={input.imdbUrl}
-              onChange={(e) => set('imdbUrl', e.target.value)}
-              placeholder="https://imdb.com/title/tt2821314"
-            />
-          </Field>
-
-          <Field label="Director">
-            <input
-              className={inputCls}
-              value={input.director}
-              onChange={(e) => set('director', e.target.value)}
-              placeholder="Nicholas Mross"
-            />
-          </Field>
-        </div>
-
-        <Field
-          label="Poster image URL (https)"
-          error={errors.image}
-          hint="Optional — a link to a poster or thumbnail."
-        >
-          <input
-            className={inputCls}
-            value={input.image}
-            onChange={(e) => set('image', e.target.value)}
-            placeholder="https://…/poster.jpg"
-          />
-        </Field>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* The tag stores seconds; this input asks for minutes and converts,
+              so it overrides the schema's label, placeholder and hint. */}
           <Field
-            label="External ID"
-            hint="Optional — helps dedupe, e.g. imdb:tt2821314"
+            schema={schema}
+            name="durationSeconds"
+            label="Duration (min)"
+            hint="Optional — in minutes."
+            error={errors.durationSeconds}
           >
-            <input
-              className={inputCls}
-              value={input.externalId}
-              onChange={(e) => set('externalId', e.target.value)}
-              placeholder="imdb:tt2821314"
-            />
-          </Field>
-
-          <Field label="Language" hint="Optional — ISO code, e.g. en">
-            <input
-              className={inputCls}
-              value={input.lang}
-              onChange={(e) => set('lang', e.target.value)}
-              placeholder="en"
-            />
+            {() => (
+              <input
+                className={inputCls}
+                value={
+                  input.durationSeconds
+                    ? String(Math.round(Number(input.durationSeconds) / 60) || '')
+                    : ''
+                }
+                onChange={(e) => {
+                  const mins = Number(e.target.value)
+                  set(
+                    'durationSeconds',
+                    Number.isFinite(mins) && mins > 0 ? String(mins * 60) : '',
+                  )
+                }}
+                placeholder="96"
+                inputMode="numeric"
+              />
+            )}
           </Field>
         </div>
 
-        <Field label="Description / review" hint="Optional — plain text.">
-          <textarea
-            className={`${inputCls} min-h-28 resize-y`}
-            value={input.description}
-            onChange={(e) => set('description', e.target.value)}
-            placeholder="Why is this worth watching?"
-          />
+        <Field schema={schema} name="watchUrl" error={errors.watchUrl}>
+          {(f) => (
+            <input
+              className={inputCls}
+              value={input.watchUrl}
+              onChange={(e) => set('watchUrl', e.target.value)}
+              placeholder={f.placeholder}
+            />
+          )}
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field schema={schema} name="imdbUrl" error={errors.imdbUrl}>
+            {(f) => (
+              <input
+                className={inputCls}
+                value={input.imdbUrl}
+                onChange={(e) => set('imdbUrl', e.target.value)}
+                placeholder={f.placeholder}
+              />
+            )}
+          </Field>
+
+          <Field schema={schema} name="director" error={errors.director}>
+            {(f) => (
+              <input
+                className={inputCls}
+                value={input.director}
+                onChange={(e) => set('director', e.target.value)}
+                placeholder={f.placeholder}
+              />
+            )}
+          </Field>
+        </div>
+
+        <Field schema={schema} name="image" error={errors.image}>
+          {(f) => (
+            <input
+              className={inputCls}
+              value={input.image}
+              onChange={(e) => set('image', e.target.value)}
+              placeholder={f.placeholder}
+            />
+          )}
+        </Field>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field schema={schema} name="externalId" error={errors.externalId}>
+            {(f) => (
+              <input
+                className={inputCls}
+                value={input.externalId}
+                onChange={(e) => set('externalId', e.target.value)}
+                placeholder={f.placeholder}
+              />
+            )}
+          </Field>
+
+          <Field schema={schema} name="lang" error={errors.lang}>
+            {(f) => (
+              <input
+                className={inputCls}
+                value={input.lang}
+                onChange={(e) => set('lang', e.target.value)}
+                placeholder={f.placeholder}
+              />
+            )}
+          </Field>
+        </div>
+
+        <Field schema={schema} name="description" error={errors.description}>
+          {(f) => (
+            <textarea
+              className={`${inputCls} min-h-28 resize-y`}
+              value={input.description}
+              onChange={(e) => set('description', e.target.value)}
+              placeholder={f.placeholder}
+            />
+          )}
         </Field>
 
         {formError && (
@@ -316,7 +374,7 @@ export function SubmitForm() {
 
         <button
           type="submit"
-          disabled={submitting || noSigner}
+          disabled={submitting || noSigner || blocked}
           className="self-start px-6 py-2.5 rounded-xl font-medium bg-[var(--color-btc)] text-black hover:bg-[var(--color-btc-dark)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting
@@ -332,31 +390,69 @@ export function SubmitForm() {
 
 /* ----------------------------- pieces ------------------------------ */
 
+/**
+ * Whose list this is. The schema event carries a name, a description and an
+ * optional picture and domain — and when there's a domain it stands in for the
+ * name, since it's the one part of the identity that can be checked against
+ * the outside world. Nothing here has been verified, so it's presented as a
+ * label, not a badge.
+ */
+function SchemaIdentity({ schema }: { schema: SubmissionSchema }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 mb-3">
+      {schema.profileImageUrl && (
+        <Poster
+          src={schema.profileImageUrl}
+          alt=""
+          className="w-9 h-9 rounded-lg shrink-0"
+        />
+      )}
+      <div className="min-w-0">
+        <p className="text-sm font-medium">{schemaDisplayName(schema)}</p>
+        <p className="text-xs text-[var(--color-muted)] mt-0.5">
+          {schema.description}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 const inputCls =
   'w-full rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] px-4 py-2.5 text-sm outline-none focus:border-[var(--color-btc)] transition-colors placeholder:text-[var(--color-muted)]'
 
+/**
+ * One input, described by the schema. A schema that doesn't define `name`
+ * renders nothing — that's how a republished schema adds or drops a field.
+ * `label` / `hint` are overridable only for inputs that convert units.
+ */
 function Field({
+  schema,
+  name,
   label,
-  required,
-  error,
   hint,
+  error,
   children,
 }: {
-  label: string
-  required?: boolean
-  error?: string
+  schema: SubmissionSchema
+  name: string
+  label?: string
   hint?: string
-  children: React.ReactNode
+  error?: string
+  children: (props: { placeholder: string }) => React.ReactNode
 }) {
+  if (!findField(schema, name)) return null
+  const field = fieldProps(schema, name)
+  const helper = hint ?? field.hint
+
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-sm font-medium">
-        {label}
-        {required && <span className="text-[var(--color-btc)]"> *</span>}
+        {label ?? field.label}
+        {field.required && <span className="text-[var(--color-btc)]"> *</span>}
       </span>
-      {children}
-      {hint && !error && (
-        <span className="text-xs text-[var(--color-muted)]">{hint}</span>
+      {children({ placeholder: field.placeholder })}
+      {helper && !error && (
+        <span className="text-xs text-[var(--color-muted)]">{helper}</span>
       )}
       {error && <span className="text-xs text-red-400">{error}</span>}
     </label>

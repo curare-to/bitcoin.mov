@@ -1,34 +1,32 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure'
-import { MOVIE_KIND } from './relays'
+import {
+  DEFAULT_SCHEMA,
+  buildSubmissionTemplate,
+  deriveIdentifier as deriveIdentifierFromValues,
+  isSafeUrl,
+  validateValues,
+  verifySubmission,
+  VIDEO_TYPES,
+  type SubmissionSchema,
+  type VideoType,
+} from './schemaEvent'
 
 /* ------------------------------------------------------------------ *
  * kind 31888 — the bitcoin.mov submission event (addressable/replaceable).
  *
- * This module is the SINGLE SOURCE OF TRUTH for the event shape. It reads
- * events defensively (relays contain malformed / partial / spam events from
- * other apps and bad actors) and builds them for submission, so the read and
+ * This module turns those events into display-ready `Video` objects and back
+ * again. The *shape* of the event — which tags exist, which are required, what
+ * each may contain — lives in schemaEvent.ts as a publishable kind 31889
+ * schema event; everything here reads and writes through it, so the read and
  * write sides can never drift apart.
+ *
+ * Events that don't match the schema are rejected, not repaired: relays carry
+ * malformed, partial and hostile events from other apps, and a half-parsed
+ * entry is worse than a missing one.
  * ------------------------------------------------------------------ */
 
-export const VIDEO_TYPES = [
-  'movie',
-  'documentary',
-  'short',
-  'interview',
-  'series',
-  'other',
-] as const
-
-export type VideoType = (typeof VIDEO_TYPES)[number]
-
-/** Field length caps — spam/abuse defense; truncate rather than reject. */
-const CAP = {
-  title: 200,
-  director: 120,
-  description: 4000,
-  tag: 60,
-  url: 500,
-} as const
+export { VIDEO_TYPES, isSafeUrl }
+export type { VideoType, SubmissionSchema }
 
 export interface WatchLink {
   url: string
@@ -67,22 +65,6 @@ export interface Video {
 
 /* ----------------------------- helpers ----------------------------- */
 
-/** True only for http(s) URLs. Blocks javascript:, data:, etc. */
-export function isSafeUrl(value: string, httpsOnly = false): boolean {
-  try {
-    const u = new URL(value)
-    if (httpsOnly) return u.protocol === 'https:'
-    return u.protocol === 'https:' || u.protocol === 'http:'
-  } catch {
-    return false
-  }
-}
-
-function clip(value: string, max: number): string {
-  const trimmed = value.trim()
-  return trimmed.length > max ? trimmed.slice(0, max) : trimmed
-}
-
 /** First tag whose name matches; returns its value (index 1) or null. */
 function tagValue(tags: string[][], name: string): string | null {
   const t = tags.find((t) => t[0] === name && typeof t[1] === 'string')
@@ -93,25 +75,12 @@ function allTags(tags: string[][], name: string): string[][] {
   return tags.filter((t) => t[0] === name && typeof t[1] === 'string')
 }
 
-/** URL/tag-safe slug for a `d` identifier fallback. */
-function slug(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80)
-}
-
 /**
  * Deterministic `d` identifier for a submission: the external id when given
  * (so "the same film" stays one editable entry), else a title+year slug.
  */
 export function deriveIdentifier(input: SubmitInput): string {
-  const ext = input.externalId.trim().toLowerCase()
-  if (ext) return ext
-  const y = coerceYear(input.year)
-  return slug(y ? `${input.title}-${y}` : input.title) || 'untitled'
+  return deriveIdentifierFromValues({ ...input })
 }
 
 /**
@@ -127,82 +96,83 @@ export function replaceableKey(event: {
 }
 
 function coerceType(value: string | null): VideoType {
-  const v = (value ?? '').toLowerCase().trim()
+  const v = (value ?? '').trim().toLowerCase()
   return (VIDEO_TYPES as readonly string[]).includes(v)
     ? (v as VideoType)
     : 'other'
 }
 
-function coerceYear(value: string | null): number | null {
-  if (!value) return null
-  const n = Number.parseInt(value, 10)
-  return Number.isFinite(n) && n >= 1900 && n <= 2100 ? n : null
+/** Posters must be https — http ones are blocked as mixed content anyway. */
+function safeImage(value: string | null): string | null {
+  const url = value?.trim()
+  return url && isSafeUrl(url, true) ? url : null
 }
 
-function coerceDuration(value: string | null): number | null {
+function toInt(value: string | null): number | null {
   if (!value) return null
   const n = Number.parseInt(value, 10)
-  return Number.isFinite(n) && n > 0 && n < 60 * 60 * 24 ? n : null
+  return Number.isFinite(n) ? n : null
 }
 
 /* ------------------------------ read ------------------------------- */
 
 /**
- * Parse a raw Nostr event into a Video, or null if it isn't a usable
- * submission. A submission MUST have a non-empty title and at least the right
- * kind — everything else is optional and defended with fallbacks.
+ * Parse a raw Nostr event into a Video, or null if it doesn't satisfy the
+ * schema. Every rule applied here — required `d` and `title`, allowed types,
+ * https-only posters, length caps — comes from the schema event, so tightening
+ * the list is a matter of republishing it rather than editing this file.
  */
-export function parseEvent(event: Event): Video | null {
-  if (event.kind !== MOVIE_KIND) return null
-  const tags = Array.isArray(event.tags) ? event.tags : []
+export function parseEvent(
+  event: Event,
+  schema: SubmissionSchema = DEFAULT_SCHEMA,
+): Video | null {
+  if (!verifySubmission(event, schema).ok) return null
 
-  const rawTitle = tagValue(tags, 'title')
-  const title = rawTitle ? clip(rawTitle, CAP.title) : ''
-  if (!title) return null // no title → not a usable entry
+  const tags = event.tags
+  // `d` and `title` are guaranteed by the schema (normalizeSchema forces them);
+  // `type` is not, so it keeps a fallback for schemas that leave it out.
+  const identifier = (tagValue(tags, 'd') ?? '').trim()
+  const director = tagValue(tags, 'director')
+  const lang = tagValue(tags, 'lang')
 
-  const identifier = tagValue(tags, 'd') ?? ''
-
+  // Belt and braces at the render boundary: the schema checks the `r` tags it
+  // names (watch, imdb), but an entry may carry `r` tags with other markers,
+  // and these URLs go straight into href/src. Never trust an unchecked one.
   const links: WatchLink[] = allTags(tags, 'r')
-    .map((t) => ({ url: clip(t[1], CAP.url), label: t[2] ? clip(t[2], CAP.tag) : null }))
+    .map((t) => ({ url: t[1].trim(), label: t[2] ? t[2].trim() : null }))
     .filter((l) => isSafeUrl(l.url))
-
-  const rawImage = tagValue(tags, 'image')
-  const image = rawImage && isSafeUrl(rawImage, true) ? clip(rawImage, CAP.url) : null
 
   const hashtags = Array.from(
     new Set(
       allTags(tags, 't')
-        .map((t) => clip(t[1], CAP.tag).toLowerCase())
+        .map((t) => t[1].trim().toLowerCase())
         .filter(Boolean),
     ),
   )
-
-  const director = tagValue(tags, 'director')
-  const lang = tagValue(tags, 'lang')
 
   return {
     id: event.id,
     pubkey: event.pubkey,
     identifier,
-    address: `${MOVIE_KIND}:${event.pubkey}:${identifier}`,
+    address: `${schema.kind}:${event.pubkey}:${identifier}`,
     createdAt: event.created_at,
-    title,
-    year: coerceYear(tagValue(tags, 'year')),
+    title: (tagValue(tags, 'title') ?? '').trim(),
+    year: toInt(tagValue(tags, 'year')),
     type: coerceType(tagValue(tags, 'type')),
-    director: director ? clip(director, CAP.director) : null,
-    durationSeconds: coerceDuration(tagValue(tags, 'duration')),
+    director: director ? director.trim() : null,
+    durationSeconds: toInt(tagValue(tags, 'duration')),
     links,
-    image,
-    externalId: tagValue(tags, 'i'),
-    lang: lang ? clip(lang, CAP.tag) : null,
+    image: safeImage(tagValue(tags, 'image')),
+    externalId: tagValue(tags, 'i')?.trim() ?? null,
+    lang: lang ? lang.trim() : null,
     hashtags,
-    description: clip(event.content ?? '', CAP.description),
+    description: (event.content ?? '').trim(),
   }
 }
 
 /* ------------------------------ write ------------------------------ */
 
-/** Input collected by the submission form. */
+/** Input collected by the submission form — keys are schema field names. */
 export interface SubmitInput {
   title: string
   year: string
@@ -219,32 +189,20 @@ export interface SubmitInput {
 
 export interface ValidationResult {
   ok: boolean
-  errors: Partial<Record<keyof SubmitInput, string>>
+  errors: Partial<Record<keyof SubmitInput | 'visibility', string>>
 }
 
-/** Validate form input before we bother the signer extension. */
-export function validateInput(input: SubmitInput): ValidationResult {
-  const errors: ValidationResult['errors'] = {}
-
-  if (!input.title.trim()) errors.title = 'Title is required.'
-  if (!input.watchUrl.trim()) {
-    errors.watchUrl = 'A watch/reference URL is required.'
-  } else if (!isSafeUrl(input.watchUrl.trim())) {
-    errors.watchUrl = 'Must be a valid http(s) URL.'
-  }
-  if (input.imdbUrl.trim() && !isSafeUrl(input.imdbUrl.trim())) {
-    errors.imdbUrl = 'Must be a valid http(s) URL.'
-  }
-  if (input.image.trim() && !isSafeUrl(input.image.trim(), true)) {
-    errors.image = 'Poster must be an https URL.'
-  }
-  if (input.year.trim() && coerceYear(input.year) === null) {
-    errors.year = 'Enter a year between 1900 and 2100.'
-  }
-  if (input.durationSeconds.trim() && coerceDuration(input.durationSeconds) === null) {
-    errors.durationSeconds = 'Duration must be a positive number of seconds.'
-  }
-
+/**
+ * Validate form input against the schema before we bother the signer
+ * extension. Pass the connected `pubkey` so a non-public schema can check
+ * whether this key is allowed to submit at all.
+ */
+export function validateInput(
+  input: SubmitInput,
+  schema: SubmissionSchema = DEFAULT_SCHEMA,
+  options: { pubkey?: string } = {},
+): ValidationResult {
+  const errors = validateValues({ ...input }, schema, options)
   return { ok: Object.keys(errors).length === 0, errors }
 }
 
@@ -255,39 +213,12 @@ export function validateInput(input: SubmitInput): ValidationResult {
  * `dOverride` reuses an existing entry's `d` when editing, so the new event
  * replaces the old one instead of creating a duplicate.
  */
-export function buildTemplate(input: SubmitInput, dOverride?: string): EventTemplate {
-  const identifier = dOverride?.trim() || deriveIdentifier(input)
-  const tags: string[][] = [
-    ['d', identifier], // makes the event addressable/replaceable
-    ['title', input.title.trim()],
-  ]
-
-  const year = coerceYear(input.year)
-  if (year) tags.push(['year', String(year)])
-
-  tags.push(['type', input.type])
-
-  if (input.director.trim()) tags.push(['director', clip(input.director, CAP.director)])
-
-  const duration = coerceDuration(input.durationSeconds)
-  if (duration) tags.push(['duration', String(duration)])
-
-  if (input.watchUrl.trim()) tags.push(['r', input.watchUrl.trim(), 'watch'])
-  if (input.imdbUrl.trim()) tags.push(['r', input.imdbUrl.trim(), 'imdb'])
-  if (input.image.trim()) tags.push(['image', input.image.trim()])
-  if (input.externalId.trim()) tags.push(['i', clip(input.externalId, CAP.tag)])
-  if (input.lang.trim()) tags.push(['lang', clip(input.lang, CAP.tag)])
-
-  // Discoverability hashtags: always "bitcoin", plus the type.
-  tags.push(['t', 'bitcoin'])
-  tags.push(['t', input.type])
-
-  return {
-    kind: MOVIE_KIND,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: clip(input.description, CAP.description),
-  }
+export function buildTemplate(
+  input: SubmitInput,
+  dOverride?: string,
+  schema: SubmissionSchema = DEFAULT_SCHEMA,
+): EventTemplate {
+  return buildSubmissionTemplate({ ...input }, schema, { identifier: dOverride })
 }
 
 /** Reverse of buildTemplate: fill the form from an existing entry, for editing. */

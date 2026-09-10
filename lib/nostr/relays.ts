@@ -1,3 +1,5 @@
+import { NAMESPACE_HASHTAG, SUBMISSION_KIND } from './schemaEvent'
+
 /**
  * Relay set.
  *
@@ -17,15 +19,16 @@ export const WRITE_RELAYS = ['ws://localhost:10547'] as const
  * 30000–39999). The coordinate `(kind, pubkey, d)` is unique, so an author can
  * edit their entry by republishing with the same `d` tag — relays keep only the
  * latest version. See `deriveIdentifier` / `replaceableKey` in schema.ts.
+ *
+ * Defined in schemaEvent.ts alongside the kind 31889 schema that describes it.
  */
-export const MOVIE_KIND = 31888
+export const MOVIE_KIND = SUBMISSION_KIND
 
 /**
- * Namespace hashtag. Custom kind numbers are shared — kind 1888, for instance,
- * is already squatted by an unrelated encrypted-note app. 31888 is currently
- * clean, but scoping reads to this tag (which every bitcoin.mov submission
- * carries) future-proofs against a foreign app crowding real entries out of a
- * relay's `limit` window. The parser still requires a `title` tag as a second
- * line of defense.
+ * Legacy discovery hashtag, kept on every submission we write and still used
+ * as a relay filter so entries published before schemas existed keep showing
+ * up. It is **not** required: the namespace is the schema author's pubkey, and
+ * entries declare which schema they follow with an `a` tag pointing at
+ * `31889:<pubkey>:<d>`. See SCHEMA_NAMESPACE in schemaEvent.ts.
  */
-export const NAMESPACE_TAG = 'bitcoin'
+export const NAMESPACE_TAG = NAMESPACE_HASHTAG

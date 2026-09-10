@@ -16,7 +16,7 @@ import { typeLabel, timeAgo, isLandscapeThumb } from '@/lib/util/format'
 import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
 
 /**
- * A horizontal reel of the newest submissions at the top of the page,
+ * A horizontal reel of the newest suggestions at the top of the page,
  * mempool.space-style. Each thumbnail is its OWN little strip of film — a
  * poster set into film stock with sprocket-hole perforations along just its
  * top and bottom edges — and the cells are spaced apart. The newest sits at
@@ -34,18 +34,18 @@ export function FilmReel() {
   // Only offer chips for types that actually have films.
   const availableTypes = useMemo(() => {
     const present = new Set<VideoType>()
-    for (const g of allGroups) for (const v of g.submissions) present.add(v.type)
+    for (const g of allGroups) for (const v of g.suggestions) present.add(v.type)
     return VIDEO_TYPES.filter((t) => present.has(t))
   }, [allGroups])
 
   // The full timeline for the selected type, ordered by release year in the
   // chosen direction — every match shows, so neither the earliest nor the
-  // latest is hidden. Missing years sort to the end; submission time breaks ties.
+  // latest is hidden. Missing years sort to the end; suggestion time breaks ties.
   const reel = useMemo(() => {
     const filtered =
       type === 'all'
         ? allGroups
-        : allGroups.filter((g) => g.submissions.some((v) => v.type === type))
+        : allGroups.filter((g) => g.suggestions.some((v) => v.type === type))
     const ascending = [...filtered].sort((a, b) => {
       const ya = a.primary.year ?? Infinity
       const yb = b.primary.year ?? Infinity
@@ -103,7 +103,7 @@ export function FilmReel() {
 
   return (
     <section
-      aria-label="Latest submissions"
+      aria-label="Latest suggestions"
       className="border-b border-[var(--color-border)]"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-2">
@@ -292,8 +292,8 @@ function FilmFrame({
               </h3>
               <p className="font-condensed text-[10px] text-[var(--color-muted)] mt-0.5">
                 {timeAgo(v.createdAt)}
-                {group.submissions.length > 1 &&
-                  ` · ×${group.submissions.length}`}
+                {group.suggestions.length > 1 &&
+                  ` · ×${group.suggestions.length}`}
               </p>
             </div>
           </div>

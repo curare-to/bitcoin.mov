@@ -15,7 +15,7 @@ import {
   parseSchemaEvent,
   schemaAddress,
   schemaDisplayName,
-  verifySubmission,
+  verifySuggestion,
 } from '../lib/nostr/schemaEvent.ts'
 
 const relays = process.argv.slice(2).filter((a) => a.startsWith('ws'))
@@ -58,7 +58,7 @@ async function main() {
   const reasons = new Map()
 
   for (const event of events) {
-    const result = verifySubmission(event, schema)
+    const result = verifySuggestion(event, schema)
     if (result.ok) {
       ok += 1
       continue
@@ -84,6 +84,14 @@ async function main() {
     console.log('\nBy reason:')
     for (const [reason, count] of [...reasons].sort((a, b) => b[1] - a[1])) {
       console.log(`  ${String(count).padStart(3)}×  ${reason}`)
+    }
+
+    if ([...reasons.keys()].some((r) => r.startsWith('schema:'))) {
+      console.log(
+        '\nThose entries predate the schema they should be replying to.\n' +
+          'Re-run `npm run seed` — kind 31888 is addressable, so it replaces\n' +
+          'them by `d` rather than creating duplicates.',
+      )
     }
   }
 

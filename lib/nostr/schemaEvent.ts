@@ -3,15 +3,20 @@ import type { Event, EventTemplate } from 'nostr-tools/pure'
 /* ------------------------------------------------------------------ *
  * kind 31889 — the bitcoin.mov *schema* event.
  *
- * A schema event describes the submission form: which tags a kind 31888
- * entry may carry, what each one means, whether it is required, and what to
- * show the user while they fill it in. It is itself an addressable event, so
- * the curator can revise it in place — and because it lives on a relay, other
- * clients can render the same form without shipping this repo's code.
+ * A schema event describes the form users fill in to suggest a title: which
+ * tags a kind 31888 *suggestion event* may carry, what each one means, whether
+ * it is required, and what to show while they fill it in. It is itself an
+ * addressable event, so the curator can revise it in place — and because it
+ * lives on a relay, other clients can render the same form without shipping
+ * this repo's code.
+ *
+ * A suggestion is published as a **reply to the schema event**: it carries the
+ * schema's `a` coordinate as its root, so the list is literally the thread of
+ * replies to its own schema, and `#a` is the query that fetches it.
  *
  * The namespace is the schema author's **pubkey**: the coordinate
  * `31889:<pubkey>:<d>` fully identifies one schema. There is no global
- * namespace tag to squat, and none is required on submissions.
+ * namespace tag to squat, and none is required on suggestions.
  *
  * This module is deliberately dependency-free (type-only imports, and no
  * relative imports at all — Node can't resolve this repo's extensionless ones).
@@ -21,10 +26,10 @@ import type { Event, EventTemplate } from 'nostr-tools/pure'
  * that way: anything imported here has to be importable from both worlds.
  * ------------------------------------------------------------------ */
 
-/** The kind a submission is published under. */
-export const SUBMISSION_KIND = 31888
+/** The kind a suggestion event is published under, in reply to its schema. */
+export const SUGGESTION_KIND = 31888
 
-/** The kind this module defines: a schema for SUBMISSION_KIND events. */
+/** The kind this module defines: a schema for SUGGESTION_KIND events. */
 export const SCHEMA_KIND = 31889
 
 export const VIDEO_TYPES = [
@@ -117,7 +122,7 @@ export interface FieldConfig {
   hint?: string
 }
 
-/** One field a submission may (or must) carry. */
+/** One field a suggestion may (or must) carry. */
 export interface FieldDef {
   /** Stable name. Also the key in the form's value map. */
   name: string
@@ -132,7 +137,7 @@ export interface FieldDef {
 
 /* ----------------------------- schema ------------------------------ */
 
-export interface SubmissionSchema {
+export interface SuggestionSchema {
   /** The schema event's `d` tag. */
   identifier: string
   /**
@@ -144,7 +149,7 @@ export interface SubmissionSchema {
   title: string
   /**
    * Required. The list's identity — what people call it. `title` labels the
-   * event ("bitcoin.mov submission"); `name` is who's publishing it
+   * event ("bitcoin.mov suggestion"); `name` is who's publishing it
    * ("bitcoin.mov"). Superseded by `domain` for display when one is set —
    * see `schemaDisplayName`.
    */
@@ -180,14 +185,19 @@ export interface SubmissionSchema {
  * The pubkey that publishes the canonical bitcoin.mov schema.
  *
  * Set this to the curator's pubkey (hex) once `npm run schema` has published
- * it. While empty, submissions carry no `a` tag and the app falls back to the
- * bundled DEFAULT_SCHEMA — everything still works, entries just don't declare
- * which schema they follow.
+ * it. Until then there is no coordinate for a suggestion to reply to, so
+ * suggestions carry no reply tags and the app works off the bundled
+ * DEFAULT_SCHEMA.
+ *
+ * Setting it turns the reply into a requirement, which means suggestions
+ * published *before* the schema existed stop verifying. Re-run `npm run seed`
+ * after publishing: kind 31888 is addressable, so re-seeding replaces each
+ * entry by its `d` rather than duplicating it.
  */
 export const SCHEMA_NAMESPACE = ''
 
 /**
- * Discovery hashtag kept on submissions for backwards compatibility. It is
+ * Discovery hashtag kept on suggestions for backwards compatibility. It is
  * **not** the namespace and is not required — the pubkey coordinate is.
  */
 export const NAMESPACE_HASHTAG = 'bitcoin'
@@ -233,7 +243,7 @@ export function isValidDomain(value: string): boolean {
  * A domain is the stronger identity — it's the one thing here that can be
  * checked against the outside world (`verifyDomain`).
  */
-export function schemaDisplayName(schema: SubmissionSchema): string {
+export function schemaDisplayName(schema: SuggestionSchema): string {
   return schema.domain ?? schema.name
 }
 
@@ -244,7 +254,7 @@ export function schemaDisplayName(schema: SubmissionSchema): string {
  * Opt-in and network-bound — nothing here calls it for you. Until you do, a
  * domain is a self-assigned label, so don't render it as verified.
  */
-export async function verifyDomain(schema: SubmissionSchema): Promise<boolean> {
+export async function verifyDomain(schema: SuggestionSchema): Promise<boolean> {
   if (!schema.domain || !schema.namespace) return false
   try {
     const url = `https://${schema.domain}/.well-known/nostr.json?name=_`
@@ -264,26 +274,26 @@ export function fieldTag(field: FieldDef): string {
 }
 
 export function findField(
-  schema: SubmissionSchema,
+  schema: SuggestionSchema,
   name: string,
 ): FieldDef | null {
   return schema.fields.find((f) => f.name === name) ?? null
 }
 
 /** Fields a form should actually prompt for — derived ones are filled in. */
-export function formFields(schema: SubmissionSchema): FieldDef[] {
+export function formFields(schema: SuggestionSchema): FieldDef[] {
   return schema.fields.filter((f) => !f.config.derived)
 }
 
 /** Addressable coordinate of the schema, or null if it isn't published yet. */
-export function schemaAddress(schema: SubmissionSchema): string | null {
+export function schemaAddress(schema: SuggestionSchema): string | null {
   if (!schema.namespace) return null
   return `${SCHEMA_KIND}:${schema.namespace}:${schema.identifier}`
 }
 
 /** May this pubkey submit under this schema? */
-export function canSubmit(
-  schema: SubmissionSchema,
+export function canSuggest(
+  schema: SuggestionSchema,
   pubkey: string | null | undefined,
 ): boolean {
   if (schema.visibility === 'public') return true
@@ -334,7 +344,7 @@ function intOrNull(value: string): number | null {
  * schema event off a relay claims: it must carry a `d` tag and a `title`.
  * A schema that omits or relaxes either gets them put back.
  */
-export function normalizeSchema(schema: SubmissionSchema): SubmissionSchema {
+export function normalizeSchema(schema: SuggestionSchema): SuggestionSchema {
   const fields = schema.fields.slice()
 
   for (const [tag, fallback] of MANDATORY_FIELDS) {
@@ -378,14 +388,14 @@ const MANDATORY_FIELDS: [string, FieldDef][] = [
 /* --------------------------- the default --------------------------- */
 
 /**
- * The bitcoin.mov submission schema. This is the shape every entry in
+ * The bitcoin.mov suggestion schema. This is the shape every entry in
  * data/seed-films.json satisfies, and the shape the submit form collects —
  * `npm run seed:dry` verifies both against it.
  */
-export const DEFAULT_SCHEMA: SubmissionSchema = normalizeSchema({
+export const DEFAULT_SCHEMA: SuggestionSchema = normalizeSchema({
   identifier: 'bitcoin.mov',
   namespace: SCHEMA_NAMESPACE,
-  title: 'bitcoin.mov submission',
+  title: 'bitcoin.mov suggestion',
   name: 'bitcoin.mov',
   description:
     'Fields for a bitcoin.mov entry: a Bitcoin movie, documentary, short, ' +
@@ -395,7 +405,7 @@ export const DEFAULT_SCHEMA: SubmissionSchema = normalizeSchema({
   // /.well-known/nostr.json from — pass `npm run schema -- --domain=…`.
   profileImageUrl: null,
   domain: null,
-  kind: SUBMISSION_KIND,
+  kind: SUGGESTION_KIND,
   visibility: 'public',
   requireAny: [['watchUrl', 'imdbUrl']],
   authors: [],
@@ -580,7 +590,7 @@ function requiredText(
  * `parseSchemaEvent` (which just wants the schema or nothing).
  */
 function readSchemaEvent(event: Event): {
-  schema: SubmissionSchema | null
+  schema: SuggestionSchema | null
   violations: SchemaViolation[]
 } {
   const violations: SchemaViolation[] = []
@@ -683,7 +693,7 @@ function readSchemaEvent(event: Event): {
     description: described,
     profileImageUrl,
     domain,
-    kind: intOrNull(tagValue(tags, 'k') ?? '') ?? SUBMISSION_KIND,
+    kind: intOrNull(tagValue(tags, 'k') ?? '') ?? SUGGESTION_KIND,
     visibility: rawVisibility as Visibility,
     fields,
     requireAny,
@@ -706,10 +716,10 @@ export function verifySchemaEvent(event: Event): SchemaVerification {
 
 /**
  * Parse a kind 31889 event into a schema, or null if it isn't a usable one.
- * Like `parseEvent`, this is defensive: relays hand us partial and hostile
+ * Like `parseSuggestion`, this is defensive: relays hand us partial and hostile
  * events, and a schema that can't be trusted is worse than no schema at all.
  */
-export function parseSchemaEvent(event: Event): SubmissionSchema | null {
+export function parseSchemaEvent(event: Event): SuggestionSchema | null {
   return readSchemaEvent(event).schema
 }
 
@@ -717,7 +727,7 @@ export function parseSchemaEvent(event: Event): SubmissionSchema | null {
 
 /** Build the unsigned kind 31889 event that publishes a schema. */
 export function buildSchemaTemplate(
-  schema: SubmissionSchema,
+  schema: SuggestionSchema,
   createdAt = Math.floor(Date.now() / 1000),
 ): EventTemplate {
   const normalized = normalizeSchema(schema)
@@ -758,10 +768,10 @@ export function buildSchemaTemplate(
   }
 }
 
-/* ------------------ write: values → submission --------------------- */
+/* ------------------ write: values → suggestion --------------------- */
 
 /** A form's collected values, keyed by field name. */
-export type SubmissionValues = Record<string, string>
+export type SuggestionValues = Record<string, string>
 
 export interface BuildOptions {
   /** Reuse an existing entry's `d` so this event replaces it. */
@@ -771,10 +781,10 @@ export interface BuildOptions {
 }
 
 /**
- * Deterministic `d` for a submission: the external id when given (so "the same
+ * Deterministic `d` for a suggestion: the external id when given (so "the same
  * film" stays one editable entry across edits), else a title+year slug.
  */
-export function deriveIdentifier(values: SubmissionValues): string {
+export function deriveIdentifier(values: SuggestionValues): string {
   const ext = (values.externalId ?? '').trim().toLowerCase()
   if (ext) return ext
   const year = intOrNull(values.year ?? '')
@@ -786,7 +796,7 @@ export function deriveIdentifier(values: SubmissionValues): string {
 /** Derived tag values the app fills in rather than prompting for. */
 function derivedValues(
   field: FieldDef,
-  values: SubmissionValues,
+  values: SuggestionValues,
   options: BuildOptions,
 ): string[] {
   switch (fieldTag(field)) {
@@ -803,14 +813,41 @@ function derivedValues(
 }
 
 /**
- * Build the unsigned submission event from a form's values, using the schema
- * as the tag layout. The result is guaranteed to satisfy `verifySubmission`
- * against the same schema (given values that pass `validateValues`) — the read
- * and write sides cannot drift, because both walk this one field list.
+ * The tags that make a suggestion a *reply* to its schema event.
+ *
+ * The root is the schema's `a` coordinate rather than an `e` event id: kind
+ * 31889 is addressable, so revising the schema mints a new event id but keeps
+ * the coordinate. Pinning an id would orphan every suggestion the moment the
+ * schema was edited.
+ *
+ * `p` notifies the schema's author and `k` names the kind being replied to,
+ * per the usual reply conventions. Neither is load-bearing — `a` is what
+ * `verifySuggestion` requires and what relays are queried on (`#a`).
+ *
+ * An unpublished schema has no coordinate to reply to, so this is empty until
+ * SCHEMA_NAMESPACE is set.
  */
-export function buildSubmissionTemplate(
-  values: SubmissionValues,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+export function replyTags(schema: SuggestionSchema): string[][] {
+  const address = schemaAddress(schema)
+  if (!address) return []
+  return [
+    ['a', address, '', 'root'],
+    ['p', schema.namespace],
+    ['k', String(SCHEMA_KIND)],
+  ]
+}
+
+/**
+ * Build the unsigned suggestion event from a form's values, using the schema
+ * as the tag layout, and address it as a reply to the schema event.
+ *
+ * The result is guaranteed to satisfy `verifySuggestion` against the same
+ * schema (given values that pass `validateValues`) — the read and write sides
+ * cannot drift, because both walk this one field list.
+ */
+export function buildSuggestionTemplate(
+  values: SuggestionValues,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: BuildOptions = {},
 ): EventTemplate {
   const tags: string[][] = []
@@ -836,9 +873,7 @@ export function buildSubmissionTemplate(
     }
   }
 
-  // Declare which schema this entry follows, when the schema is published.
-  const address = schemaAddress(schema)
-  if (address) tags.push(['a', address])
+  tags.push(...replyTags(schema))
 
   return {
     kind: schema.kind,
@@ -874,8 +909,8 @@ export interface SchemaVerification {
   violations: SchemaViolation[]
 }
 
-/** Anything with the shape of a submission — a signed event or a template. */
-export interface SubmissionLike {
+/** Anything with the shape of a suggestion — a signed event or a template. */
+export interface SuggestionLike {
   kind: number
   tags: string[][]
   content: string
@@ -931,7 +966,7 @@ export function checkValue(field: FieldDef, value: string): string | null {
 }
 
 /** Every value a field holds in an event (its tags, or the content body). */
-function valuesOf(field: FieldDef, event: SubmissionLike): string[] {
+function valuesOf(field: FieldDef, event: SuggestionLike): string[] {
   const tag = fieldTag(field)
   if (tag === CONTENT_TAG) {
     const content = (event.content ?? '').trim()
@@ -950,7 +985,7 @@ function valuesOf(field: FieldDef, event: SubmissionLike): string[] {
 }
 
 /**
- * Verify a submission against a schema. This is the gate: an event that does
+ * Verify a suggestion against a schema. This is the gate: an event that does
  * not match is rejected rather than shown, on the way in from a relay and on
  * the way out to one.
  *
@@ -961,14 +996,14 @@ function valuesOf(field: FieldDef, event: SubmissionLike): string[] {
  * Pass `pubkey` when verifying an unsigned template, so a non-public schema
  * can still check who is about to sign it.
  */
-export function verifySubmission(
-  event: SubmissionLike,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+export function verifySuggestion(
+  event: SuggestionLike,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: { pubkey?: string } = {},
 ): SchemaVerification {
   const violations: SchemaViolation[] = []
   const tags = Array.isArray(event.tags) ? event.tags : []
-  const subject: SubmissionLike = { ...event, tags }
+  const subject: SuggestionLike = { ...event, tags }
 
   if (event.kind !== schema.kind) {
     violations.push({
@@ -977,18 +1012,28 @@ export function verifySubmission(
     })
   }
 
-  // An `a` tag naming a different schema means this entry isn't ours to judge.
-  // Only schema coordinates count — entries carry `a` tags for other reasons.
+  // A suggestion is a reply to its schema, so the root `a` tag is required —
+  // but only once the schema has a coordinate to reply to. An unpublished
+  // schema (empty SCHEMA_NAMESPACE) has nothing to point at, so suggestions
+  // made before it was published stay valid until it is. Only schema
+  // coordinates count here; entries carry `a` tags for other reasons too.
   const address = schemaAddress(schema)
-  const declared = tags
-    .filter((t) => t[0] === 'a' && typeof t[1] === 'string')
-    .map((t) => t[1])
-    .filter((value) => value.startsWith(`${SCHEMA_KIND}:`))
-  if (address && declared.length > 0 && !declared.includes(address)) {
-    violations.push({
-      field: 'schema',
-      message: `Entry declares schema ${declared[0]}, not ${address}.`,
-    })
+  if (address) {
+    const roots = tags
+      .filter((t) => t[0] === 'a' && typeof t[1] === 'string')
+      .map((t) => t[1])
+      .filter((value) => value.startsWith(`${SCHEMA_KIND}:`))
+    if (roots.length === 0) {
+      violations.push({
+        field: 'schema',
+        message: `A suggestion must reply to its schema (${address}).`,
+      })
+    } else if (!roots.includes(address)) {
+      violations.push({
+        field: 'schema',
+        message: `Suggestion replies to ${roots[0]}, not ${address}.`,
+      })
+    }
   }
 
   for (const field of schema.fields) {
@@ -1036,7 +1081,7 @@ export function verifySubmission(
         field: 'visibility',
         message: `A ${schema.visibility} schema needs a known author.`,
       })
-    } else if (!canSubmit(schema, author)) {
+    } else if (!canSuggest(schema, author)) {
       violations.push({
         field: 'visibility',
         message: `This list is ${schema.visibility} — that key may not submit to it.`,
@@ -1047,7 +1092,7 @@ export function verifySubmission(
   return { ok: violations.length === 0, violations }
 }
 
-function requireAnyMessage(schema: SubmissionSchema, group: string[]): string {
+function requireAnyMessage(schema: SuggestionSchema, group: string[]): string {
   const labels = group.map((name) => findField(schema, name)?.label ?? name)
   return `Provide at least one of: ${labels.join(', ')}.`
 }
@@ -1056,11 +1101,11 @@ function requireAnyMessage(schema: SubmissionSchema, group: string[]): string {
 
 /**
  * Validate a form's values before we bother the signer extension. Same rules
- * as `verifySubmission`, minus the derived fields the app fills in itself.
+ * as `verifySuggestion`, minus the derived fields the app fills in itself.
  */
 export function validateValues(
-  values: SubmissionValues,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+  values: SuggestionValues,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: { pubkey?: string } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -1082,7 +1127,7 @@ export function validateValues(
     }
   }
 
-  if (!canSubmit(schema, options.pubkey)) {
+  if (!canSuggest(schema, options.pubkey)) {
     errors.visibility = options.pubkey
       ? `This list is ${schema.visibility} — your key may not submit to it.`
       : `This list is ${schema.visibility} — connect an authorised key to submit.`
@@ -1096,7 +1141,7 @@ export function validateValues(
  * a form can't crash on a schema that omits the field.
  */
 export function fieldProps(
-  schema: SubmissionSchema,
+  schema: SuggestionSchema,
   name: string,
 ): { label: string; placeholder: string; hint?: string; required: boolean } {
   const field = findField(schema, name)

@@ -5,31 +5,31 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { Event } from 'nostr-tools/pure'
 import {
-  buildTemplate,
+  buildSuggestion,
   validateInput,
   videoToInput,
-  parseEvent,
+  parseSuggestion,
   VIDEO_TYPES,
-  type SubmitInput,
+  type SuggestionInput,
   type VideoType,
 } from '@/lib/nostr/schema'
 import {
   DEFAULT_SCHEMA,
-  canSubmit,
+  canSuggest,
   fieldProps,
   findField,
   schemaDisplayName,
-  type SubmissionSchema,
+  type SuggestionSchema,
 } from '@/lib/nostr/schemaEvent'
 import { Poster } from '@/components/ui/Poster'
 import { signAndPublish, Nip07Error } from '@/lib/nostr/nip07'
 import { videoStore, useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
 import { pool } from '@/lib/nostr/pool'
-import { READ_RELAYS, MOVIE_KIND } from '@/lib/nostr/relays'
+import { READ_RELAYS, SUGGESTION_KIND } from '@/lib/nostr/relays'
 import { typeLabel, shortPubkey } from '@/lib/util/format'
 
-const EMPTY: SubmitInput = {
+const EMPTY: SuggestionInput = {
   title: '',
   year: '',
   type: 'documentary',
@@ -43,7 +43,7 @@ const EMPTY: SubmitInput = {
   description: '',
 }
 
-type Errors = Partial<Record<keyof SubmitInput | 'visibility', string>>
+type Errors = Partial<Record<keyof SuggestionInput | 'visibility', string>>
 
 interface Success {
   id: string
@@ -66,12 +66,12 @@ export function SubmitForm() {
   // The schema event decides which inputs exist, what they're called, what
   // they suggest, and which are required. Swap this for one fetched off a
   // relay (parseSchemaEvent) and the form below follows without edits.
-  const schema: SubmissionSchema = DEFAULT_SCHEMA
+  const schema: SuggestionSchema = DEFAULT_SCHEMA
   const typeOptions = (findField(schema, 'type')?.config.options ??
     VIDEO_TYPES) as readonly VideoType[]
-  const blocked = !canSubmit(schema, pubkey)
+  const blocked = !canSuggest(schema, pubkey)
 
-  const [input, setInput] = useState<SubmitInput>(EMPTY)
+  const [input, setInput] = useState<SuggestionInput>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -91,10 +91,10 @@ export function SubmitForm() {
     }
     let cancelled = false
     pool
-      .get([...READ_RELAYS], { ids: [editId], kinds: [MOVIE_KIND] })
+      .get([...READ_RELAYS], { ids: [editId], kinds: [SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled || !event) return
-        const v = parseEvent(event)
+        const v = parseSuggestion(event)
         if (!v) return
         setInput(videoToInput(v))
         setEditTarget({ d: v.identifier, pubkey: v.pubkey })
@@ -106,7 +106,7 @@ export function SubmitForm() {
     }
   }, [editId, prefilled, videos])
 
-  function set<K extends keyof SubmitInput>(key: K, value: SubmitInput[K]) {
+  function set<K extends keyof SuggestionInput>(key: K, value: SuggestionInput[K]) {
     setInput((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -129,7 +129,7 @@ export function SubmitForm() {
           'You can only edit entries published by your own key. Signing this will create a new entry instead.',
         )
       }
-      const template = buildTemplate(input, editTarget?.d, schema)
+      const template = buildSuggestion(input, editTarget?.d, schema)
       const { signed, accepted, total } = await signAndPublish(template)
       videoStore.pushEvent(signed) // show it immediately
       setSuccess({ id: signed.id, accepted, total })
@@ -151,7 +151,7 @@ export function SubmitForm() {
         <div className="text-5xl">✅</div>
         <h1 className="text-2xl font-bold">Published!</h1>
         <p className="text-[var(--color-muted)]">
-          Your submission reached {success.accepted} of {success.total} relays.
+          Your suggestion reached {success.accepted} of {success.total} relays.
           It may take a moment to propagate across the network.
         </p>
         <div className="flex items-center justify-center gap-3 mt-2">
@@ -397,7 +397,7 @@ export function SubmitForm() {
  * the outside world. Nothing here has been verified, so it's presented as a
  * label, not a badge.
  */
-function SchemaIdentity({ schema }: { schema: SubmissionSchema }) {
+function SchemaIdentity({ schema }: { schema: SuggestionSchema }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 mb-3">
       {schema.profileImageUrl && (
@@ -433,7 +433,7 @@ function Field({
   error,
   children,
 }: {
-  schema: SubmissionSchema
+  schema: SuggestionSchema
   name: string
   label?: string
   hint?: string

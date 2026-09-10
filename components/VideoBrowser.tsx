@@ -9,7 +9,7 @@ import { FilterBar, type SortMode, type TypeFilter } from './FilterBar'
 function matchesSearch(group: FilmGroup, q: string): boolean {
   if (!q) return true
   const needle = q.toLowerCase()
-  return group.submissions.some((v) => {
+  return group.suggestions.some((v) => {
     return (
       v.title.toLowerCase().includes(needle) ||
       (v.director?.toLowerCase().includes(needle) ?? false) ||
@@ -29,7 +29,7 @@ export function VideoBrowser() {
     let result = groupFilms(videos)
 
     if (type !== 'all') {
-      result = result.filter((g) => g.submissions.some((v) => v.type === type))
+      result = result.filter((g) => g.suggestions.some((v) => v.type === type))
     }
     if (search.trim()) {
       result = result.filter((g) => matchesSearch(g, search.trim()))
@@ -95,7 +95,7 @@ function EmptyState({ hasAny }: { hasAny: boolean }) {
       <p className="text-[var(--color-muted)] max-w-md mx-auto">
         {hasAny
           ? 'Try clearing the search or picking a different category.'
-          : 'Be the first to add a Bitcoin title — submissions are published to Nostr as kind 31888 events.'}
+          : 'Be the first to add a Bitcoin title — suggestions are published to Nostr as kind 31888 events.'}
       </p>
     </div>
   )

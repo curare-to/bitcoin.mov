@@ -1,6 +1,9 @@
 /**
- * Schema script — publishes the bitcoin.mov submission schema as a
+ * Schema script — publishes the bitcoin.mov suggestion schema as a
  * kind 31889 event, signed by YOUR key.
+ *
+ * Suggestions (kind 31888) are published as replies to this event, so its
+ * coordinate is what scopes the whole list.
  *
  * The schema event is what tells any client — this app or someone else's —
  * which tags a kind 31888 entry may carry, which are required, and what to
@@ -208,9 +211,15 @@ async function main() {
   if (accepted > 0) {
     console.log(
       `\nCoordinate: ${SCHEMA_KIND}:${pubkey}:${schema.identifier}\n\n` +
-        'Set SCHEMA_NAMESPACE in lib/nostr/schemaEvent.ts to:\n' +
-        `  '${pubkey}'\n` +
-        'so submissions declare this schema with an `a` tag.',
+        'Next:\n' +
+        '  1. Set SCHEMA_NAMESPACE in lib/nostr/schemaEvent.ts to:\n' +
+        `       '${pubkey}'\n` +
+        '  2. Re-run `npm run seed`.\n\n' +
+        'Suggestions are replies to this schema, so they must carry its `a`\n' +
+        'coordinate. Entries published before it existed will not verify until\n' +
+        'they are re-seeded — kind 31888 is addressable, so re-seeding replaces\n' +
+        'them by `d` rather than duplicating them. `npm run verify` will show\n' +
+        'any that still need it.',
     )
   }
 

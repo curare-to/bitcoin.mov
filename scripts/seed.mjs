@@ -29,8 +29,8 @@ import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
 import {
   DEFAULT_SCHEMA,
-  buildSubmissionTemplate,
-  verifySubmission,
+  buildSuggestionTemplate,
+  verifySuggestion,
 } from '../lib/nostr/schemaEvent.ts'
 
 const WRITE_RELAYS = ['ws://localhost:10547']
@@ -45,10 +45,10 @@ function buildAll(films, now, pubkey) {
 
   films.forEach((film, i) => {
     // Stagger timestamps so the list order is preserved (first entry = newest).
-    const template = buildSubmissionTemplate(film, DEFAULT_SCHEMA, {
+    const template = buildSuggestionTemplate(film, DEFAULT_SCHEMA, {
       createdAt: now - i,
     })
-    const { ok, violations } = verifySubmission(template, DEFAULT_SCHEMA, {
+    const { ok, violations } = verifySuggestion(template, DEFAULT_SCHEMA, {
       pubkey,
     })
     if (ok) templates.push(template)

@@ -75,7 +75,7 @@ placeholder automatically.
 ## Publish the schema too
 
 The entries describe films; the **schema event** describes the entries. Publish
-it once so other clients can render the same submission form:
+it once so other clients can render the same suggestion form:
 
 ```bash
 npm run schema:dry                       # preview the schema and its event

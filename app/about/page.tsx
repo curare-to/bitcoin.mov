@@ -33,15 +33,18 @@ export default function AboutPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">Kind 31888 events</h2>
         <p className="text-[var(--color-muted)]">
-          Each submission is a Nostr event of{' '}
+          Each suggestion is a Nostr event of{' '}
           <code className="text-[var(--color-text)]">kind 31888</code> — a custom
           <em> addressable</em> application kind this project defines. The event
           carries the title, year, type, links and a description in its
           tags and content. Because it's addressable, you can edit your own entry
           later: republishing with the same identifier replaces the old version.
-          This site simply reads every kind 31888 event from a set of public
-          relays and displays them. Nothing is centrally curated: the list you
-          see is the network's.
+          Every suggestion is a reply to a{' '}
+          <code className="text-[var(--color-text)]">kind 31889</code> schema
+          event, which is what defines which fields a suggestion may carry — so the
+          list is the thread of replies to its own schema. This site reads those
+          replies from a set of public relays and displays them. Nothing is
+          centrally curated: the list you see is the network's.
         </p>
       </section>
 

@@ -7,7 +7,7 @@ Anyone with a Nostr signer can add one — and edit their own entries later.
 
 - **Stack:** Next.js (App Router) + React 19 + TypeScript + Tailwind v4
 - **Data:** `nostr-tools` v2 (`SimplePool`), read from public relays
-- **Submissions:** signed in the browser via a NIP-07 extension (Alby, nos2x) —
+- **Suggestions:** signed in the browser via a NIP-07 extension (Alby, nos2x) —
   the app never touches your private key
 - **Hosting:** static export (`output: 'export'`) → deploy the `out/` folder to
   GitHub Pages, Netlify, Vercel, Cloudflare Pages, or IPFS
@@ -29,7 +29,12 @@ npm run serve    # preview the static build locally
 For a GitHub Pages sub-path deploy, uncomment `basePath`/`assetPrefix` in
 [`next.config.mjs`](next.config.mjs).
 
-## The kind 31888 event (the "spec")
+## The kind 31888 suggestion event (the "spec")
+
+The events users sign to submit a title are **suggestion events**, published as
+**replies to the schema event** that describes them. The list is literally the
+thread of replies to its own schema, and `#a` on the schema's coordinate is the
+query that fetches it.
 
 kind 31888 is a **custom, addressable application kind** this project defines —
 it is *not* a standardized NIP. It sits in Nostr's addressable/parameterized-
@@ -41,7 +46,7 @@ The event's *shape* isn't hardcoded in this client: it's described by a
 **kind 31889 schema event** (see below). This client defends against junk two
 ways:
 
-1. **Read scope:** entries are found by the schema coordinate they declare
+1. **Read scope:** entries are found by the schema coordinate they reply to
    (`#a`), and — for entries published before schemas existed — by the legacy
    `#t = bitcoin` hashtag, so unrelated traffic can't crowd real entries out of
    a relay's result window.
@@ -61,8 +66,10 @@ ways:
   "tags": [
     ["d", "imdb:tt2821314"],                      // REQUIRED — replaceable id
     ["title", "The Rise and Rise of Bitcoin"],    // REQUIRED
+    ["a", "31889:<pubkey>:bitcoin.mov", "", "root"],  // REQUIRED — the schema replied to
+    ["p", "<schema author pubkey>"],              // notifies the curator
+    ["k", "31889"],                               // kind being replied to
     ["t", "bitcoin"],                             // optional discovery hashtag
-    ["a", "31889:<pubkey>:bitcoin.mov"],          // optional — schema followed
     ["year", "2014"],
     ["type", "documentary"],   // movie | documentary | short | interview | series | other
     ["director", "Nicholas Mross"],
@@ -77,10 +84,23 @@ ways:
 }
 ```
 
-`d`, `title` and `type` are required, plus at least one `r` link; everything
-else is optional. There is **no required namespace tag** — the namespace is the
-schema author's pubkey. The `d` identifier defaults to the external id, falling
-back to a `title-year` slug. Duplicate submissions of the same film *by
+`d`, `title` and `type` are required, plus at least one `r` link and the `a`
+root that makes it a reply; everything else is optional. There is **no required
+namespace tag** — the namespace is the schema author's pubkey.
+
+The root is the schema's `a` **coordinate**, not an `e` event id. Kind 31889 is
+addressable, so revising the schema mints a new event id but keeps the
+coordinate — pinning an id would orphan every suggestion the moment the schema
+was edited. `p` and `k` follow the usual reply conventions but aren't
+load-bearing; `a` is what's verified and queried.
+
+**The `a` root is required only once the schema has a coordinate to reply to.**
+While `SCHEMA_NAMESPACE` is empty the schema is unpublished, there's nothing to
+point at, and suggestions carry no reply tags. Setting it turns the reply into a
+requirement, so suggestions published beforehand stop verifying — re-run
+`npm run seed` (kind 31888 is addressable, so entries are replaced by `d`, not
+duplicated) and `npm run verify` will show any that still need it. The `d` identifier defaults to the external id, falling
+back to a `title-year` slug. Duplicate suggestions of the same film *by
 different authors* are still collapsed in the UI by external id (`i`), falling
 back to normalized title + year.
 
@@ -111,7 +131,7 @@ squatted. Kind 31889 is addressable too, so republishing revises it in place.
   "content": "Fields for a bitcoin.mov entry…",   // mirrors the description tag
   "tags": [
     ["d", "bitcoin.mov"],       // REQUIRED — schema id
-    ["title", "bitcoin.mov submission"],  // REQUIRED — labels the event
+    ["title", "bitcoin.mov suggestion"],  // REQUIRED — labels the event
     ["name", "bitcoin.mov"],    // REQUIRED — the list's identity
     ["description", "Fields for a bitcoin.mov entry…"],  // REQUIRED
     ["visibility", "public"],   // REQUIRED — public | private | closed
@@ -144,7 +164,7 @@ A schema event says who's publishing the list, not just what its fields are:
 | `domain` | optional | **replaces the name** wherever the list is shown |
 
 `title` and `name` are both required and usually differ: `title` labels the
-event ("bitcoin.mov submission"), `name` is the publisher ("bitcoin.mov").
+event ("bitcoin.mov suggestion"), `name` is the publisher ("bitcoin.mov").
 `schemaDisplayName()` returns `domain ?? name`.
 
 A `domain` is a **claim, not proof** — anyone can put any domain in a tag. The
@@ -179,7 +199,7 @@ form `hint`, and `derived` for values the app fills in itself (`d`, `t`).
 Relays are open, so `private` is a client-side convention, not encryption —
 never put secrets in one.
 
-`d` and `title` are **always** required on both a submission and a schema
+`d` and `title` are **always** required on both a suggestion and a schema
 event: `normalizeSchema` puts them back if a schema event off a relay omits or
 relaxes them, so no schema can opt out of them. On a schema event, `name`,
 `description` and `visibility` are required too.

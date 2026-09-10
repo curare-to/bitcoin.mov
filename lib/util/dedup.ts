@@ -4,20 +4,20 @@ import type { Video } from '@/lib/nostr/schema'
  * Duplicate-film collapsing.
  *
  * The list is open, so the same film gets submitted by many different people
- * (each author's entry is independently editable). We group submissions into
+ * (each author's entry is independently editable). We group suggestions into
  * one "film" card, keyed by:
  *   1. external id (e.g. imdb:tt2821314) when present, else
  *   2. a normalized title + year.
- * The newest submission is the card's representative; the rest are its
- * additional reviews/submissions, surfaced in the detail view.
+ * The newest suggestion is the card's representative; the rest are its
+ * additional reviews/suggestions, surfaced in the detail view.
  * ------------------------------------------------------------------ */
 
 export interface FilmGroup {
   key: string
-  /** Newest submission — represents the film in lists. */
+  /** Newest suggestion — represents the film in lists. */
   primary: Video
-  /** All submissions for this film, newest first (includes primary). */
-  submissions: Video[]
+  /** All suggestions for this film, newest first (includes primary). */
+  suggestions: Video[]
 }
 
 function normalizeTitle(title: string): string {
@@ -29,7 +29,7 @@ function normalizeTitle(title: string): string {
     .replace(/\s+/g, ' ')
 }
 
-/** The grouping key for a single submission. */
+/** The grouping key for a single suggestion. */
 export function groupKey(video: Video): string {
   if (video.externalId) return `ext:${video.externalId.toLowerCase().trim()}`
   const t = normalizeTitle(video.title)
@@ -37,7 +37,7 @@ export function groupKey(video: Video): string {
 }
 
 /**
- * Collapse a flat list of submissions (already sorted newest-first) into
+ * Collapse a flat list of suggestions (already sorted newest-first) into
  * de-duplicated film groups, preserving newest-first order by representative.
  */
 export function groupFilms(videos: Video[]): FilmGroup[] {
@@ -56,8 +56,8 @@ export function groupFilms(videos: Video[]): FilmGroup[] {
   }
 
   return order.map((key) => {
-    const submissions = groups.get(key)!
-    // Input is newest-first, so submissions[0] is the newest.
-    return { key, primary: submissions[0], submissions }
+    const suggestions = groups.get(key)!
+    // Input is newest-first, so suggestions[0] is the newest.
+    return { key, primary: suggestions[0], suggestions }
   })
 }

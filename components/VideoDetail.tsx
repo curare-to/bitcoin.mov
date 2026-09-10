@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { Event } from 'nostr-tools/pure'
 import { pool } from '@/lib/nostr/pool'
-import { READ_RELAYS, MOVIE_KIND } from '@/lib/nostr/relays'
-import { parseEvent, type Video } from '@/lib/nostr/schema'
+import { READ_RELAYS, SUGGESTION_KIND } from '@/lib/nostr/relays'
+import { parseSuggestion, type Video } from '@/lib/nostr/schema'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
 import { groupKey } from '@/lib/util/dedup'
@@ -47,10 +47,10 @@ export function VideoDetail() {
     let cancelled = false
     setState('loading')
     pool
-      .get([...READ_RELAYS], { ids: [id], kinds: [MOVIE_KIND] })
+      .get([...READ_RELAYS], { ids: [id], kinds: [SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled) return
-        const parsed = event ? parseEvent(event) : null
+        const parsed = event ? parseSuggestion(event) : null
         setFetched(parsed)
         setState(parsed ? 'found' : 'missing')
       })
@@ -64,7 +64,7 @@ export function VideoDetail() {
 
   const video = fromStore ?? fetched
 
-  // Other submissions of the same film, from whatever the store has loaded.
+  // Other suggestions of the same film, from whatever the store has loaded.
   const siblings = useMemo(() => {
     if (!video) return []
     const key = groupKey(video)
@@ -81,7 +81,7 @@ export function VideoDetail() {
         <div className="text-4xl">🍿</div>
         <h1 className="text-xl font-semibold">Entry not found</h1>
         <p className="text-[var(--color-muted)]">
-          This submission couldn’t be located on the relays we read.
+          This suggestion couldn’t be located on the relays we read.
         </p>
         <Link href="/" className="text-[var(--color-btc)] hover:underline">
           ← Back to all titles
@@ -189,7 +189,7 @@ export function VideoDetail() {
       {siblings.length > 0 && (
         <section className="border-t border-[var(--color-border)] pt-6">
           <h2 className="font-semibold mb-3">
-            Other submissions for this title ({siblings.length})
+            Other suggestions for this title ({siblings.length})
           </h2>
           <ul className="flex flex-col gap-3">
             {siblings.map((s) => (

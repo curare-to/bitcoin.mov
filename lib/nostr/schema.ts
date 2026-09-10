@@ -1,18 +1,18 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure'
 import {
   DEFAULT_SCHEMA,
-  buildSubmissionTemplate,
+  buildSuggestionTemplate,
   deriveIdentifier as deriveIdentifierFromValues,
   isSafeUrl,
   validateValues,
-  verifySubmission,
+  verifySuggestion,
   VIDEO_TYPES,
-  type SubmissionSchema,
+  type SuggestionSchema,
   type VideoType,
 } from './schemaEvent'
 
 /* ------------------------------------------------------------------ *
- * kind 31888 — the bitcoin.mov submission event (addressable/replaceable).
+ * kind 31888 — the bitcoin.mov suggestion event (addressable/replaceable).
  *
  * This module turns those events into display-ready `Video` objects and back
  * again. The *shape* of the event — which tags exist, which are required, what
@@ -26,7 +26,7 @@ import {
  * ------------------------------------------------------------------ */
 
 export { VIDEO_TYPES, isSafeUrl }
-export type { VideoType, SubmissionSchema }
+export type { VideoType, SuggestionSchema }
 
 export interface WatchLink {
   url: string
@@ -34,9 +34,9 @@ export interface WatchLink {
   label: string | null
 }
 
-/** A parsed, display-ready submission. */
+/** A parsed, display-ready suggestion. */
 export interface Video {
-  /** Nostr event id (hex). Unique per submission version. */
+  /** Nostr event id (hex). Unique per suggestion version. */
   id: string
   /** Author pubkey (hex). */
   pubkey: string
@@ -76,10 +76,10 @@ function allTags(tags: string[][], name: string): string[][] {
 }
 
 /**
- * Deterministic `d` identifier for a submission: the external id when given
+ * Deterministic `d` identifier for a suggestion: the external id when given
  * (so "the same film" stays one editable entry), else a title+year slug.
  */
-export function deriveIdentifier(input: SubmitInput): string {
+export function deriveIdentifier(input: SuggestionInput): string {
   return deriveIdentifierFromValues({ ...input })
 }
 
@@ -122,11 +122,11 @@ function toInt(value: string | null): number | null {
  * https-only posters, length caps — comes from the schema event, so tightening
  * the list is a matter of republishing it rather than editing this file.
  */
-export function parseEvent(
+export function parseSuggestion(
   event: Event,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
 ): Video | null {
-  if (!verifySubmission(event, schema).ok) return null
+  if (!verifySuggestion(event, schema).ok) return null
 
   const tags = event.tags
   // `d` and `title` are guaranteed by the schema (normalizeSchema forces them);
@@ -172,8 +172,8 @@ export function parseEvent(
 
 /* ------------------------------ write ------------------------------ */
 
-/** Input collected by the submission form — keys are schema field names. */
-export interface SubmitInput {
+/** Input collected by the suggestion form — keys are schema field names. */
+export interface SuggestionInput {
   title: string
   year: string
   type: VideoType
@@ -189,7 +189,7 @@ export interface SubmitInput {
 
 export interface ValidationResult {
   ok: boolean
-  errors: Partial<Record<keyof SubmitInput | 'visibility', string>>
+  errors: Partial<Record<keyof SuggestionInput | 'visibility', string>>
 }
 
 /**
@@ -198,8 +198,8 @@ export interface ValidationResult {
  * whether this key is allowed to submit at all.
  */
 export function validateInput(
-  input: SubmitInput,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+  input: SuggestionInput,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: { pubkey?: string } = {},
 ): ValidationResult {
   const errors = validateValues({ ...input }, schema, options)
@@ -213,16 +213,16 @@ export function validateInput(
  * `dOverride` reuses an existing entry's `d` when editing, so the new event
  * replaces the old one instead of creating a duplicate.
  */
-export function buildTemplate(
-  input: SubmitInput,
+export function buildSuggestion(
+  input: SuggestionInput,
   dOverride?: string,
-  schema: SubmissionSchema = DEFAULT_SCHEMA,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
 ): EventTemplate {
-  return buildSubmissionTemplate({ ...input }, schema, { identifier: dOverride })
+  return buildSuggestionTemplate({ ...input }, schema, { identifier: dOverride })
 }
 
-/** Reverse of buildTemplate: fill the form from an existing entry, for editing. */
-export function videoToInput(video: Video): SubmitInput {
+/** Reverse of buildSuggestion: fill the form from an existing entry, for editing. */
+export function videoToInput(video: Video): SuggestionInput {
   const imdb = video.links.find((l) => l.label === 'imdb')
   const watch = video.links.find((l) => l !== imdb) ?? video.links[0] ?? null
   return {

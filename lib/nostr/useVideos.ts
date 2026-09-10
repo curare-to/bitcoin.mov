@@ -4,8 +4,8 @@ import { useSyncExternalStore } from 'react'
 import type { Event } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools/filter'
 import { pool } from './pool'
-import { READ_RELAYS, MOVIE_KIND, NAMESPACE_TAG } from './relays'
-import { parseEvent, replaceableKey, type Video } from './schema'
+import { READ_RELAYS, SUGGESTION_KIND, NAMESPACE_TAG } from './relays'
+import { parseSuggestion, replaceableKey, type Video } from './schema'
 import { DEFAULT_SCHEMA, schemaAddress } from './schemaEvent'
 
 /* ------------------------------------------------------------------ *
@@ -73,11 +73,11 @@ class VideoStore {
     // and everything published before schemas existed by the legacy `t` tag.
     // Overlap is free — `upsert` dedupes by replaceable coordinate.
     const filters: Filter[] = [
-      { kinds: [MOVIE_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
+      { kinds: [SUGGESTION_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
     ]
     const address = schemaAddress(DEFAULT_SCHEMA)
     if (address) {
-      filters.push({ kinds: [MOVIE_KIND], '#a': [address], limit: 500 })
+      filters.push({ kinds: [SUGGESTION_KIND], '#a': [address], limit: 500 })
     }
 
     this.subs = filters.map((filter) =>
@@ -117,7 +117,7 @@ class VideoStore {
   private rebuild() {
     const videos: Video[] = []
     for (const event of this.events.values()) {
-      const parsed = parseEvent(event)
+      const parsed = parseSuggestion(event)
       if (parsed) videos.push(parsed)
     }
     videos.sort((a, b) => b.createdAt - a.createdAt)
@@ -134,7 +134,7 @@ if (process.env.NODE_ENV !== 'production' && typeof window !== 'undefined') {
   ;(window as unknown as { __videoStore?: VideoStore }).__videoStore = videoStore
 }
 
-/** Subscribe a component to the live list of submissions. */
+/** Subscribe a component to the live list of suggestions. */
 export function useVideos(): VideosSnapshot {
   return useSyncExternalStore(
     videoStore.subscribe,

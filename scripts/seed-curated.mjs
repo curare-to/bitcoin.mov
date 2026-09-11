@@ -3,14 +3,18 @@
  * *curated entries*, in reply to the schema, using YOUR key.
  *
  * Only the pubkey that published the schema may curate, so this is the one seed
- * step that needs your nsec. It curates a subset by default: a list where
- * everything is curated shows none of the interesting states, and the point of
- * seeding is to see the app as it actually behaves.
+ * step that needs your nsec. It curates every suggested film, so a freshly
+ * seeded relay gives you a full home page — that page lists curated entries
+ * only, and an empty one shows nothing of how the app behaves.
  *
  *   npm run seed:curated -- --dry-run     # no key needed, nothing signed
  *   NOSTR_NSEC=nsec1... npm run seed:curated
- *   NOSTR_NSEC=nsec1... npm run seed:curated -- --count=20
- *   NOSTR_NSEC=nsec1... npm run seed:curated -- --all
+ *   NOSTR_NSEC=nsec1... npm run seed:curated -- --count=12   # leave some pending
+ *
+ * One curated entry per *film*, not per suggestion: several people may have
+ * suggested the same title, and they share a `d`, so curating each in turn
+ * would just overwrite the same coordinate. The newest suggestion of each film
+ * is the one signed off on.
  *
  * Curated entries keep the suggestion's `d`, so re-running revises them rather
  * than piling up duplicates.
@@ -40,8 +44,9 @@ import {
 
 async function main() {
   const dryRun = has('dry-run')
-  const all = has('all')
-  const count = intFlag('count', 12)
+  // Everything, unless asked for less. `--count=N` is there for demoing the
+  // pending state; the default is a fully curated list.
+  const limit = intFlag('count', 0)
 
   const pool = new SimplePool()
   const { schema, published } = await loadSchema(pool)
@@ -86,15 +91,24 @@ async function main() {
     return
   }
 
-  // Stable pick: sorted by `d`, so re-running curates the same entries and
-  // revises them rather than curating a different arbitrary subset each time.
-  const ordered = [...eligible].sort((a, b) => a.d.localeCompare(b.d))
-  const picked = all ? ordered : ordered.slice(0, count)
+  // One entry per film. Suggestions of the same title share a `d`, so curating
+  // each in turn would land them all on one coordinate, leaving whichever came
+  // last. Sign off on the newest suggestion of each instead.
+  const byFilm = new Map()
+  for (const row of eligible) {
+    const held = byFilm.get(row.d)
+    if (!held || row.event.created_at > held.event.created_at) byFilm.set(row.d, row)
+  }
+
+  // Sorted by `d`, so a limited run picks the same entries every time and
+  // revises them rather than curating a different arbitrary subset.
+  const ordered = [...byFilm.values()].sort((a, b) => a.d.localeCompare(b.d))
+  const picked = limit > 0 ? ordered.slice(0, limit) : ordered
 
   console.log(
-    `${rows.length} suggestions (${invalid} invalid, ` +
-      `${rows.filter((r) => r.done).length} already curated).\n` +
-      `Curating ${picked.length}${all ? ' (all)' : ` of ${eligible.length}`}.`,
+    `${rows.length} suggestions of ${byFilm.size} films ` +
+      `(${invalid} invalid, ${rows.filter((r) => r.done).length} already curated).\n` +
+      `Curating ${picked.length}${limit > 0 ? ` of ${byFilm.size}` : ' (all)'}.`,
   )
 
   const templates = picked.map((row) => ({

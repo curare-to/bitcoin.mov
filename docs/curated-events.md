@@ -183,11 +183,12 @@ NOSTR_NSEC=nsec1... npm run curate -- --all
 It refuses to curate a suggestion that doesn't satisfy the schema, and refuses
 to sign with a key that isn't the schema's author.
 
-The bulk version, for seeding:
+The bulk version, for seeding — every suggested film by default, one curated
+entry per film rather than per suggestion:
 
 ```bash
-NOSTR_NSEC=nsec1... npm run seed:curated              # a stable subset (12)
-NOSTR_NSEC=nsec1... npm run seed:curated -- --all
+NOSTR_NSEC=nsec1... npm run seed:curated
+NOSTR_NSEC=nsec1... npm run seed:curated -- --count=12   # leave some pending
 ```
 
 A suggestion counts as already curated when a curated event shares its `d` —

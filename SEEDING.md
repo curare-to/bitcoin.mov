@@ -77,18 +77,26 @@ This step reads the schema off the relay, so run step 1 first.
 
 ### 3. Curated — `npm run seed:curated`
 
-Signs off on some of those suggestions as kind 31890 curated entries, using your
-key. It curates 12 by default rather than everything: a list where nothing is
-pending shows none of the interesting states.
+Signs off on those suggestions as kind 31890 curated entries, using your key.
+It curates **every suggested film** by default, so a freshly seeded relay gives
+you a full home page — that page lists curated entries only, and an empty one
+shows nothing of how the app behaves.
+
+One entry per *film*, not per suggestion. Several people may have suggested the
+same title and they share a `d`, so curating each in turn would land them all on
+one coordinate; the newest suggestion of each film is the one signed off on. The
+37 films seeded from 42 suggestions therefore become 37 curated entries.
+
+To leave some pending — to see the curated/pending split in `npm run curate` or
+on `/suggestions`:
 
 ```bash
-NOSTR_NSEC=nsec1... npm run seed:curated -- --count=20
-NOSTR_NSEC=nsec1... npm run seed:curated -- --all
+NOSTR_NSEC=nsec1... npm run seed:curated -- --count=12
 ```
 
-The picks are stable (sorted by `d`), and curated entries keep the suggestion's
-`d`, so re-running revises them rather than piling up duplicates. The script
-refuses to sign with a key that isn't the schema's author.
+Limited picks are stable (sorted by `d`), and curated entries keep the
+suggestion's `d`, so re-running revises them rather than piling up duplicates.
+The script refuses to sign with a key that isn't the schema's author.
 
 ## Verify
 

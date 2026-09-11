@@ -57,6 +57,17 @@ export function intFlag(name, fallback) {
   return n
 }
 
+/**
+ * "wss://relay.damus.io, wss://nos.lol (production)" — the target, and which
+ * NODE_ENV chose it. Printed by every script that publishes: with the relay
+ * list switching on the environment, this line is what makes a production
+ * run recognisable before anything is signed.
+ */
+export function describeRelays() {
+  const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development'
+  return `${RELAYS.join(', ')} (${mode})`
+}
+
 export function short(pubkey) {
   return pubkey ? `${pubkey.slice(0, 8)}…` : '?'
 }

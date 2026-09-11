@@ -40,7 +40,7 @@ import { dirname, join, relative } from 'node:path'
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
-import { RELAYS, publish } from './lib.mjs'
+import { RELAYS, describeRelays, publish } from './lib.mjs'
 import {
   DEFAULT_CURATED_SCHEMA,
   CURATED_SCHEMA_CAP,
@@ -263,7 +263,7 @@ async function main() {
   }
   console.log()
 
-  console.log(`Publishing schema to ${WRITE_RELAYS.length} relays…\n`)
+  console.log(`Publishing schema to ${describeRelays()}…\n`)
 
   const pool = new SimplePool()
   const accepted = await publish(pool, event, WRITE_RELAYS)

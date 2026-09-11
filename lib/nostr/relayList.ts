@@ -1,17 +1,34 @@
 /**
- * The relays this list lives on — the ONE place to change before deploying.
+ * The relays this list lives on.
  *
  * Both the app (lib/nostr/relays.ts) and the scripts (scripts/lib.mjs) read
- * from here, so publishing and reading can't drift onto different relays. This
- * file has no imports on purpose: plain Node loads it as well as the bundler.
+ * from here, so publishing and reading can't drift onto different relays.
+ * This file has no imports on purpose: plain Node loads it as well as the
+ * bundler.
  *
- * Before going live:
- *   - Use `wss://`, not `ws://`. GitHub Pages serves over https, and browsers
- *     refuse an insecure websocket from an https page — the app would connect
- *     to nothing and show nothing, with no error to speak of.
- *   - Then re-run `npm run seed` so the schema, suggestions and curated entries
- *     actually exist on the relays the deployed site reads.
+ * Which set applies is decided by NODE_ENV:
+ *
+ *   - In the browser, Next inlines it from the *command*: `next dev` is
+ *     "development", `next build` is "production", whatever the shell says.
+ *     So the dev server talks to the local relay and the deployed export talks
+ *     to the public ones, with no edit in between.
+ *   - In the scripts it is the shell's value. Production is opt-in there:
+ *     `NODE_ENV=production npm run seed` publishes to the public relays;
+ *     anything else — development, or unset on a fresh clone — stays local.
+ *     Publishing is the one thing here that can't be taken back, so the
+ *     default is the relay nobody else can see.
+ *
+ * Public relays must be `wss://`: GitHub Pages is https, and a browser refuses
+ * an insecure `ws://` socket from an https page — the site would connect to
+ * nothing and show nothing, with no error to speak of.
  */
-export const READ_RELAYS = ['ws://localhost:10547'] as const
+const PRODUCTION = process.env.NODE_ENV === 'production'
 
-export const WRITE_RELAYS = ['ws://localhost:10547'] as const
+const LOCAL = ['ws://localhost:10547'] as const
+
+/** Swap for your own. These are two long-lived, open public relays. */
+const PUBLIC = ['wss://relay.damus.io', 'wss://nos.lol'] as const
+
+export const READ_RELAYS: readonly string[] = PRODUCTION ? PUBLIC : LOCAL
+
+export const WRITE_RELAYS: readonly string[] = PRODUCTION ? PUBLIC : LOCAL

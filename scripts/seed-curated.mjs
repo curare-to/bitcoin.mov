@@ -32,6 +32,7 @@ import {
 import { planCuration } from './curate.mjs'
 import {
   RELAYS,
+  describeRelays,
   done,
   has,
   intFlag,
@@ -141,7 +142,7 @@ async function main() {
   }
 
   console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
-  console.log(`Publishing to ${RELAYS.length} relays…\n`)
+  console.log(`Publishing to ${describeRelays()}…\n`)
 
   let ok = 0
   for (const { row, template } of templates) {

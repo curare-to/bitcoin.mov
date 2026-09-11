@@ -31,6 +31,7 @@ import {
 } from '../lib/nostr/curatedSchemaEvent.ts'
 import {
   RELAYS,
+  describeRelays,
   done,
   flag,
   has,
@@ -143,7 +144,7 @@ async function main() {
     return
   }
 
-  console.log(`\nPublishing to ${RELAYS.length} relays…\n`)
+  console.log(`\nPublishing to ${describeRelays()}…\n`)
   let ok = 0
   for (const row of built) {
     const event = finalizeEvent(row.template, row.author.sk)

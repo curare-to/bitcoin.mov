@@ -136,13 +136,24 @@ wherever a title was suggested more than once.
 The site is a static export that talks to relays from the browser, so
 deploying it is mostly a matter of pointing it somewhere real. In order:
 
-1. **Relays.** Edit [`lib/nostr/relayList.ts`](lib/nostr/relayList.ts) — the
-   one list both the app and the scripts use. They must be `wss://`: GitHub
-   Pages is https, and a browser refuses an insecure `ws://` socket from an
-   https page, so the site would connect to nothing and show nothing.
-2. **Re-seed onto them.** Nothing exists on the new relays yet:
-   `NOSTR_NSEC=nsec1… npm run seed`. Because the relay list is shared, no
-   `--relay=` flag is needed.
+1. **Relays.** [`lib/nostr/relayList.ts`](lib/nostr/relayList.ts) switches on
+   `NODE_ENV`: the dev server and any script run without `NODE_ENV=production`
+   use the local relay; the built export and a production script run use the
+   public ones. It ships with two well-known open relays — swap in your own.
+   They must be `wss://`: GitHub Pages is https, and a browser refuses an
+   insecure `ws://` socket from an https page, so the site would connect to
+   nothing and show nothing.
+2. **Re-seed onto them.** Nothing exists on the public relays yet. Production
+   is opt-in for the scripts, so:
+
+   ```bash
+   NODE_ENV=production NOSTR_NSEC=nsec1… npm run seed
+   ```
+
+   Every script prints where it's publishing and which mode chose it —
+   `wss://relay.damus.io, wss://nos.lol (production)` — before signing
+   anything. Without `NODE_ENV=production` it stays local, on a fresh clone
+   too; publishing is the one step that can't be taken back.
 3. **Commit the schema file.** `seed:schema` writes
    `public/.well-known/curare.to/nostr.json`, and the submit page refuses
    submissions without it. It is currently in `.gitignore`; the deploy builds

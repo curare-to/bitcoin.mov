@@ -172,6 +172,14 @@ The representative is the curated entry if there is one, otherwise the newest.
 `npm run seed:suggestions --duplicates=8` seeds extra second opinions so this
 path has something to show.
 
+## Seeing them
+
+`/suggestions` in the app is the raw feed: one row per suggestion event, newest
+first, with whoever signed it and a marker when the curator has taken the title
+up. That's deliberately not what the home page shows — there, duplicates are
+collapsed into one film card. Use the feed to check whether a title has already
+been suggested before adding it; there's a link to it from the submit form.
+
 ## Publishing one
 
 In the app: the submit form, signed by a NIP-07 extension. The app never sees a

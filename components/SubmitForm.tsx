@@ -183,11 +183,19 @@ export function SubmitForm() {
       <h1 className="font-display font-black text-4xl tracking-tight mb-2">
         {editTarget ? 'Edit your entry' : 'Submit a title'}
       </h1>
-      <p className="text-[var(--color-muted)] mb-6">
-        {editTarget
-          ? 'Republishing replaces your existing entry — same address, new version.'
-          : `Published to Nostr as a kind ${schema.kind} event, signed by your own key.`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <p className="text-[var(--color-muted)]">
+          {editTarget
+            ? 'Republishing replaces your existing entry — same address, new version.'
+            : `Published to Nostr as a kind ${schema.kind} event, signed by your own key.`}
+        </p>
+        <Link
+          href="/suggestions"
+          className="shrink-0 text-sm px-3 py-1.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-muted)] transition-colors"
+        >
+          View other suggestions →
+        </Link>
+      </div>
 
       <SchemaIdentity schema={schema} />
 

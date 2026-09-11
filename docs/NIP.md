@@ -48,6 +48,7 @@ against.
 | `field`       | MAY, repeated | one entry field — see [Field tags](#field-tags)           |
 | `require-any` | MAY, repeated | field names of which at least one MUST be present         |
 | `p`           | MAY, repeated | additional pubkeys allowed to suggest on a `closed` or `private` list |
+| `relay`       | SHOULD, repeated | a `wss://` relay the list lives on — see [Relays](#relays) |
 
 `.content` SHOULD mirror the `description` tag so that clients which read
 content rather than tags still show something. The tag is authoritative; a
@@ -133,6 +134,23 @@ into accepting untitled or unaddressable entries.
 Relays are open, so `private` is a client-side convention, not encryption.
 Nothing secret belongs in a `private` list.
 
+### Relays
+
+`relay` tags name the relays suggestions and canonical events are published
+to and read from. They are part of the signed event, so a client that finds
+the schema on any relay — or in the [HTTPS document](#serving-the-schema-over-https)
+— knows where a reply belongs, and cannot be misdirected by an unsigned
+configuration file.
+
+Each value MUST be a `ws://` or `wss://` URL; a schema carrying a malformed
+one MUST be rejected, since a client that accepted it could silently fail to
+publish. Duplicates are collapsed.
+
+A schema SHOULD name at least one relay. When it names none, a client MAY fall
+back to relays of its own choosing. When it names some, a client publishing a
+suggestion or canonical event MUST publish to them, and SHOULD read the list
+from them.
+
 ### Domain
 
 `domain` is a bare hostname (no scheme, port or path; at least two labels).
@@ -162,6 +180,7 @@ The bitcoin.mov schema, as published (field tags abbreviated):
     ["visibility", "public"],
     ["picture", "https://bitcoin.mov/icon.svg"],
     ["domain", "bitcoin.mov"],
+    ["relay", "wss://ephemeral.mantra.press"],
 
     ["field", "identifier", "token", "required", "the-rise-and-rise-of-bitcoin-2014", "Identifier", "{\"tag\":\"d\",\"max\":80,\"derived\":true}"],
     ["field", "title", "text", "required", "The Rise and Rise of Bitcoin", "Title", "{\"max\":200}"],
@@ -196,7 +215,7 @@ schema event**, so the list is the thread of replies to its own schema.
 | `d` | MUST | the entry's identifier |
 | `title` | MUST | the entry's title |
 | *per schema* | as the schema says | one tag per field, at the field's `tag`, with its `marker` as the third element when it has one |
-| `a` | MUST | `["a", "31889:<curator>:<schema d>", "<relay url>", "root"]` — the schema replied to |
+| `a` | MUST | `["a", "31889:<curator>:<schema d>", "<relay hint>", "root"]` — the schema replied to; the hint SHOULD be the first of the schema's `relay` tags |
 | `p` | SHOULD | the curator's pubkey |
 | `k` | SHOULD | `31889` |
 
@@ -248,7 +267,7 @@ supplies it.
     ["t", "bitcoin"],
     ["t", "documentary"],
 
-    ["a", "31889:7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25:bitcoin.mov", "", "root"],
+    ["a", "31889:7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25:bitcoin.mov", "wss://ephemeral.mantra.press", "root"],
     ["p", "7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25"],
     ["k", "31889"]
   ],
@@ -317,7 +336,7 @@ The curator signing off on the suggestion above:
     ["t", "bitcoin"],
     ["t", "documentary"],
 
-    ["a", "31889:7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25:bitcoin.mov", "", "root"],
+    ["a", "31889:7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25:bitcoin.mov", "wss://ephemeral.mantra.press", "root"],
     ["p", "7c965d8c2acdfd635562da3bcb82596b595be28b008d8b54ec702ed4c67d9d25"],
     ["k", "31889"],
 
@@ -400,7 +419,9 @@ as a JSON document:
 ```
 
 `names` and `relays` follow the [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md) shape so a reader can pick out
-the curator and relay hints without parsing tags. This is **not** the NIP-05
+the curator and relay hints without parsing tags. `relays` MUST be copied from
+the event's own `relay` tags rather than written from configuration, so the
+unsigned part of the document cannot contradict the signed part. This is **not** the NIP-05
 path — that is `/.well-known/nostr.json` at the domain root, and it answers
 "who am I" rather than "here is the schema". The path segment `curare.to`
 names this protocol.
@@ -426,6 +447,9 @@ it contains.
   carry `r` tags with markers the schema does not know, and those reach the
   page too.
 - A client MUST NOT render entry strings as HTML.
+- A client publishing a suggestion or canonical event MUST send it to the
+  schema's `relay` tags when there are any, and SHOULD show the user where it
+  is going.
 
 ## Relay behaviour
 
@@ -443,6 +467,10 @@ No relay support beyond [NIP-01](https://github.com/nostr-protocol/nips/blob/mas
   NOT be trusted to have done so.
 - **A schema from a relay is untrusted input.** The mandatory-field rule exists
   so that no schema, wherever it came from, can relax `d` or `title`.
+- **Relays are part of what is signed.** A client that took its publish
+  targets from an unsigned file could be made to send suggestions where the
+  curator will never see them; taking them from the event's `relay` tags
+  means the curator vouched for them.
 
 ## Reference implementation
 

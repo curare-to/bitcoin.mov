@@ -81,7 +81,14 @@ function flag(name) {
 
 /** Apply --visibility / --author overrides to the bundled schema. */
 function resolveSchema() {
-  const schema = { ...DEFAULT_CURATED_SCHEMA, authors: [...DEFAULT_CURATED_SCHEMA.authors] }
+  const schema = {
+    ...DEFAULT_CURATED_SCHEMA,
+    authors: [...DEFAULT_CURATED_SCHEMA.authors],
+    // Sign the relays we're about to publish to into the event itself, so a
+    // client that finds the schema anywhere knows where replies go — and can't
+    // be pointed elsewhere by an unsigned file.
+    relays: [...WRITE_RELAYS],
+  }
 
   const [visibility] = flag('visibility')
   if (visibility) {
@@ -160,6 +167,7 @@ function printSchema(schema) {
   if (schema.profileImageUrl) console.log(`  picture:    ${schema.profileImageUrl}`)
   console.log(`  about:      ${schema.description}`)
   console.log(`  governs kind ${schema.kind}, visibility: ${schema.visibility}`)
+  console.log(`  relays:     ${schema.relays.join(', ') || '(none — clients will use their own)'}`)
   if (schema.authors.length > 0) {
     console.log(`  extra authors allowed: ${schema.authors.length}`)
   }
@@ -196,10 +204,13 @@ async function writeWellKnown(event, schema, pubkey) {
   // directory existed will 404 everything in it until restarted. The repo keeps
   // a public/.gitkeep so this normally can't happen, but say so if it does.
   const fresh = !existsSync(join(repoRoot, 'public'))
+  // `relays` is read back off the signed event, not from config, so the two
+  // can't disagree: what the file says is exactly what the curator signed.
+  const signedRelays = event.tags.filter((t) => t[0] === 'relay').map((t) => t[1])
   const document = {
     coordinate: `${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
     names: { _: pubkey },
-    relays: { [pubkey]: [...WRITE_RELAYS] },
+    relays: { [pubkey]: signedRelays },
     schema: event,
   }
 

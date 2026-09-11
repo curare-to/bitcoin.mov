@@ -35,8 +35,19 @@ async function main() {
   )
   console.log(
     `  ${curatedSchemaDisplayName(schema)} — ${schema.description}\n` +
-      `  kind ${schema.kind}, visibility: ${schema.visibility}\n`,
+      `  kind ${schema.kind}, visibility: ${schema.visibility}`,
   )
+  if (published && schema.relays.length > 0) {
+    const missing = schema.relays.filter((r) => !READ_RELAYS.includes(r))
+    console.log(`  relays:     ${schema.relays.join(', ')}`)
+    if (missing.length > 0) {
+      console.log(
+        `  ! the schema names ${missing.join(', ')} but this run is reading ` +
+          `${READ_RELAYS.join(', ')} — suggestions may be landing where you aren't looking`,
+      )
+    }
+  }
+  console.log()
 
   // Both halves of the list: what people suggested, and what the curator
   // signed off on. Curated entries answer to the same schema plus two rules.

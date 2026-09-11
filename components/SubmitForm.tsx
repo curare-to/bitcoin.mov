@@ -131,7 +131,7 @@ export function SubmitForm({ schema }: { schema: CuratedSchema }) {
         )
       }
       const template = buildCuratedSuggestion(input, editTarget?.d, schema)
-      const { signed, accepted, total } = await signAndPublish(template)
+      const { signed, accepted, total } = await signAndPublish(template, schema.relays)
       videoStore.pushEvent(signed) // show it immediately
       setSuccess({ id: signed.id, accepted, total })
       setInput(EMPTY)
@@ -481,6 +481,11 @@ function CuratedSchemaIdentity({ schema }: { schema: CuratedSchema }) {
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           {schema.description}
         </p>
+        {schema.relays.length > 0 && (
+          <p className="text-xs text-[var(--color-muted)] mt-1.5 font-mono truncate">
+            → {schema.relays.join(', ')}
+          </p>
+        )}
       </div>
     </div>
   )

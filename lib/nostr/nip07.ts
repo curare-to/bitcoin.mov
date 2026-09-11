@@ -29,11 +29,16 @@ export interface PublishResult {
 export class Nip07Error extends Error {}
 
 /**
- * Sign an unsigned template via the extension and publish it, best-effort,
- * to the write relays. Throws Nip07Error with a friendly message on failure.
+ * Sign an unsigned template via the extension and publish it, best-effort.
+ * Throws Nip07Error with a friendly message on failure.
+ *
+ * `relays` is where it goes — normally the list the schema event names, so a
+ * suggestion lands where the list actually lives. The configured write relays
+ * are the fallback for a schema that doesn't say.
  */
 export async function signAndPublish(
   template: EventTemplate,
+  relays: readonly string[] = WRITE_RELAYS,
 ): Promise<PublishResult> {
   const provider = getNip07()
   if (!provider) {
@@ -58,9 +63,15 @@ export async function signAndPublish(
     throw new Nip07Error('The signer returned an invalid event.')
   }
 
-  const relays = [...WRITE_RELAYS]
-  const results = await Promise.allSettled(pool.publish(relays, signed))
-  const accepted = results.filter((r) => r.status === 'fulfilled').length
+  const targets = relays.length > 0 ? [...relays] : [...WRITE_RELAYS]
+  const results = await Promise.allSettled(pool.publish(targets, signed))
+  // pool.publish() *resolves* with "connection failure: …" for an unreachable
+  // relay rather than rejecting, so a fulfilled promise is not an acceptance.
+  const accepted = results.filter(
+    (r) =>
+      r.status === 'fulfilled' &&
+      !String(r.value ?? '').startsWith('connection failure:'),
+  ).length
 
   if (accepted === 0) {
     throw new Nip07Error(
@@ -68,5 +79,5 @@ export async function signAndPublish(
     )
   }
 
-  return { signed, accepted, total: relays.length }
+  return { signed, accepted, total: targets.length }
 }

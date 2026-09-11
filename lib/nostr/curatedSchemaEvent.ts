@@ -198,6 +198,14 @@ export interface CuratedSchema {
   requireAny: string[][]
   /** Extra pubkeys allowed to submit under a `closed` / `private` schema. */
   authors: string[]
+  /**
+   * Where the list lives: the relays suggestions and canonical events are
+   * published to and read from. Signed into the schema event as `relay` tags,
+   * so a client that finds the schema anywhere knows where to send a reply —
+   * and can't be misdirected by an unsigned config file. Empty means the
+   * schema doesn't say, and a client falls back to its own list.
+   */
+  relays: string[]
   /** Provenance when parsed off a relay. */
   source?: { id: string; createdAt: number }
 }
@@ -340,6 +348,16 @@ export function canCurate(
   return Boolean(pubkey) && Boolean(schema.namespace) && pubkey === schema.namespace
 }
 
+/** A websocket relay URL: `wss://` or, for local development, `ws://`. */
+export function isRelayUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return (u.protocol === 'wss:' || u.protocol === 'ws:') && u.hostname !== ''
+  } catch {
+    return false
+  }
+}
+
 /** True only for http(s) URLs. Blocks javascript:, data:, etc. */
 export function isSafeUrl(value: string, httpsOnly = false): boolean {
   try {
@@ -447,6 +465,9 @@ export const DEFAULT_CURATED_SCHEMA: CuratedSchema = normalizeCuratedSchema({
   visibility: 'public',
   requireAny: [['watchUrl', 'imdbUrl']],
   authors: [],
+  // Filled in by whoever publishes it (scripts/schema.mjs uses the relays it
+  // is publishing to). This module stays free of relay config on purpose.
+  relays: [],
   fields: [
     {
       name: 'identifier',
@@ -723,6 +744,21 @@ function readSchemaEvent(event: Event): {
     .filter((t) => t[0] === 'p' && typeof t[1] === 'string')
     .map((t) => t[1])
 
+  // A relay the schema names is where replies go, so a malformed one is worth
+  // refusing the schema over: the alternative is a client that silently can't
+  // publish.
+  const relays: string[] = []
+  for (const t of tags) {
+    if (t[0] !== 'relay' || typeof t[1] !== 'string') continue
+    const url = t[1].trim()
+    if (!isRelayUrl(url)) {
+      violations.push({ field: 'relay', message: `"${url}" is not a ws:// or wss:// relay URL.` })
+      continue
+    }
+    if (!relays.includes(url)) relays.push(url)
+  }
+  if (violations.length > 0) return { schema: null, violations }
+
   const schema = normalizeCuratedSchema({
     identifier,
     namespace: event.pubkey,
@@ -736,6 +772,7 @@ function readSchemaEvent(event: Event): {
     fields,
     requireAny,
     authors,
+    relays,
     source: { id: event.id, createdAt: event.created_at },
   })
 
@@ -795,6 +832,7 @@ export function buildCuratedSchemaTemplate(
 
   for (const group of normalized.requireAny) tags.push(['require-any', ...group])
   for (const pubkey of normalized.authors) tags.push(['p', pubkey])
+  for (const relay of normalized.relays) tags.push(['relay', relay])
 
   return {
     kind: CURATED_SCHEMA_KIND,
@@ -868,8 +906,10 @@ function derivedValues(
 export function replyTags(schema: CuratedSchema): string[][] {
   const address = curatedSchemaAddress(schema)
   if (!address) return []
+  // The third element is the NIP-10 relay hint: where a reader who doesn't
+  // already know this list can go to find the schema being replied to.
   return [
-    ['a', address, '', 'root'],
+    ['a', address, schema.relays[0] ?? '', 'root'],
     ['p', schema.namespace],
     ['k', String(CURATED_SCHEMA_KIND)],
   ]

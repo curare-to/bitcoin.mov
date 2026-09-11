@@ -36,6 +36,7 @@ npm run schema        # NOSTR_NSEC=nsec1… — publish it  (= npm run seed:sche
 | `field` | repeated | one per field — see below |
 | `require-any` | repeated | field names, at least one of which must be present |
 | `p` | repeated | extra pubkeys allowed to suggest on a closed/private list |
+| `relay` | repeated | where the list lives — the relays replies are published to and read from |
 
 `content` mirrors the `description` tag, so generic Nostr clients that read
 content rather than our tags still show something. The tag is authoritative.
@@ -128,6 +129,19 @@ means at least one must be there. That rule exists because of a real entry:
 *The Good Wife: Bitcoin for Dummies* has an IMDb page and nowhere to watch it.
 Making `watchUrl` required would have excluded it; dropping the requirement
 entirely would have let linkless entries in.
+
+## Relays
+
+`["relay", "wss://…"]`, repeated. Where suggestions and canonical events are
+published to and read from. Signed into the event, so a client that finds the
+schema anywhere knows where a reply belongs — and can't be sent elsewhere by an
+unsigned config file. The publish script signs the relays it is publishing to,
+and the `relays` map in the well-known document is copied from these tags, not
+from configuration, so the two can't disagree.
+
+The submit form publishes to these and shows them under the list's name. A
+malformed one (`https://`, no host) fails the whole schema: a client that
+accepted it could silently fail to publish.
 
 ## Identity
 

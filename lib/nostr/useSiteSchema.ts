@@ -52,15 +52,18 @@ async function loadSiteSchema(signal: AbortSignal): Promise<SiteSchemaState> {
   }
   if (!response.ok) return unavailable(`${response.status} ${response.statusText}`.trim())
 
-  let body: unknown
+  let event: unknown
   try {
-    body = await response.json()
+    event = await response.json()
   } catch {
     return unavailable('is not valid JSON')
   }
 
-  const event = (body as { schema?: unknown })?.schema
-  if (!event || typeof event !== 'object') return unavailable('has no `schema` event in it')
+  // The file is the signed event itself — nothing beside it that a reader
+  // might trust without a signature covering it.
+  if (!event || typeof event !== 'object' || !('sig' in event)) {
+    return unavailable('is not a signed Nostr event')
+  }
 
   // The site serves it, but the signature is what ties it to the curator —
   // a file is only as trustworthy as the key that signed what's inside it.

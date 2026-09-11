@@ -59,21 +59,16 @@ the build — so the schema is fetchable from the site itself at
 **`/.well-known/curare.to/nostr.json`**, with no relay and no Nostr client
 involved. **Commit that file**: it's what the deployed site serves.
 
-```jsonc
-{
-  "coordinate": "31889:<pubkey>:bitcoin.mov",
-  "names":  { "_": "<pubkey>" },            // NIP-05 shape, so the curator's
-  "relays": { "<pubkey>": ["ws://…"] },     // key and relays are easy to find
-  "schema": { /* the signed kind 31889 event */ }
-}
-```
+The file is the signed kind 31889 event, exactly as published — nothing
+wrapped around it, so every byte is covered by the signature. The app reads
+the curator from its `pubkey` and the relays from its `relay` tags.
 
-The file is written *before* publishing, so a relay being down doesn't cost you
-the HTTPS copy. The submit form checks for it on load and says *Not accepting
-submissions* until it's there — so until you've run this step, the site can be
-browsed but not added to. It is not the NIP-05 path — that's `/.well-known/nostr.json` at
-the domain root, and it answers a different question ("who am I", rather than
-"here's the schema").
+It's written *before* publishing, so a relay being down doesn't cost you the
+HTTPS copy. The app fetches it before reading anything and the submit form
+gates on it — until you've run this step the home page says *No list
+published* and the form says *Not accepting submissions*. It is not the NIP-05
+path — that's `/.well-known/nostr.json` at the domain root, and it answers a
+different question ("who am I", rather than "here's the schema").
 
 Same script as `npm run schema`, which also takes the identity flags
 (`--name=`, `--domain=`, `--picture=`) — see the README.

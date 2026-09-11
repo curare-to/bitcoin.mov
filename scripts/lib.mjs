@@ -136,9 +136,8 @@ const WELL_KNOWN = join(
  */
 export function wellKnownCurator() {
   try {
-    const doc = JSON.parse(readFileSync(WELL_KNOWN, 'utf8'))
-    const event = doc?.schema
-    if (!event || !verifyEvent(event)) return null
+    const event = JSON.parse(readFileSync(WELL_KNOWN, 'utf8'))
+    if (!event?.sig || !verifyEvent(event)) return null
     return parseCuratedSchemaEvent(event) ? event.pubkey : null
   } catch {
     return null

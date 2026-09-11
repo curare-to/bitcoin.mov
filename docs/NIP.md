@@ -415,24 +415,17 @@ A site built around a list SHOULD also serve its signed schema event at
 /.well-known/curare.to/nostr.json
 ```
 
-as a JSON document:
+The body MUST be the signed `kind:31889` event itself — a JSON object with
+`id`, `pubkey`, `created_at`, `kind`, `tags`, `content` and `sig` — and
+nothing else. Everything a reader needs is inside it: the curator is `pubkey`,
+the coordinate is `31889:<pubkey>:<d>`, the relays are its `relay` tags. A
+wrapper carrying any of those beside the event would be unsigned, and an
+unsigned field beside a signed event is an invitation to trust the wrong
+thing; with the bare event, every byte of the file is under the signature.
 
-```jsonc
-{
-  "coordinate": "31889:<curator>:<d>",
-  "names":  { "_": "<curator>" },
-  "relays": { "<curator>": ["wss://…"] },
-  "schema": { /* the signed kind 31889 event */ }
-}
-```
-
-`names` and `relays` follow the [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md) shape so a reader can pick out
-the curator and relay hints without parsing tags. `relays` MUST be copied from
-the event's own `relay` tags rather than written from configuration, so the
-unsigned part of the document cannot contradict the signed part. This is **not** the NIP-05
-path — that is `/.well-known/nostr.json` at the domain root, and it answers
-"who am I" rather than "here is the schema". The path segment `curare.to`
-names this protocol.
+This is **not** the NIP-05 path — that is `/.well-known/nostr.json` at the
+domain root, and it answers "who am I" rather than "here is the schema". The
+path segment `curare.to` names this protocol.
 
 A client for the site SHOULD fetch this document before reading or writing
 anything, MUST verify the signature of the event inside it, and MUST reject it

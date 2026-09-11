@@ -11,9 +11,9 @@
  * the coordinate `31889:<pubkey>:bitcoin.mov` identifies this schema and no
  * other. Nothing global is claimed, so nothing can be squatted.
  *
- * Publishing also writes the signed event to
+ * Publishing also writes the signed event — just the event — to
  * public/.well-known/curare.to/nostr.json, which the static export copies into
- * the build — so the schema is fetchable over HTTPS from the site itself, not
+ * the build, so the schema is fetchable over HTTPS from the site itself, not
  * only from a relay. Commit that file: it is what the deployed site serves.
  *
  *   # See the schema and the event it produces (no key, no network):
@@ -189,33 +189,28 @@ function printSchema(schema) {
 }
 
 /**
- * Write the signed schema to the well-known path.
+ * Write the signed schema to the well-known path — the event and nothing else.
  *
- * `names` and `relays` follow the NIP-05 shape, so a reader can pick the
- * curator's pubkey and relay hints out of it without understanding anything
- * else in the file. Note this is *not* the NIP-05 path — that is
- * `/.well-known/nostr.json` at the domain root, and `verifyDomain()` in
- * curatedSchemaEvent.ts is what checks it. This file says "here is the schema";
- * NIP-05 says "here is who I am".
+ * Everything a reader could want is in the event: the curator is `pubkey`,
+ * the coordinate is `31889:<pubkey>:<d>`, the relays are the `relay` tags.
+ * An earlier version wrapped it in `{ coordinate, names, relays, schema }`;
+ * those fields were unsigned, and unsigned fields beside a signed event are an
+ * invitation to trust the wrong thing. Now every byte in the file is under
+ * the signature.
+ *
+ * This is *not* the NIP-05 path — that is `/.well-known/nostr.json` at the
+ * domain root, and `verifyDomain()` is what checks it. This file says "here
+ * is the schema"; NIP-05 says "here is who I am".
  */
-async function writeWellKnown(event, schema, pubkey) {
+async function writeWellKnown(event) {
   const path = join(repoRoot, ...WELL_KNOWN)
   // Next resolves `public/` once at startup: a dev server that began before the
   // directory existed will 404 everything in it until restarted. The repo keeps
   // a public/.gitkeep so this normally can't happen, but say so if it does.
   const fresh = !existsSync(join(repoRoot, 'public'))
-  // `relays` is read back off the signed event, not from config, so the two
-  // can't disagree: what the file says is exactly what the curator signed.
-  const signedRelays = event.tags.filter((t) => t[0] === 'relay').map((t) => t[1])
-  const document = {
-    coordinate: `${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
-    names: { _: pubkey },
-    relays: { [pubkey]: signedRelays },
-    schema: event,
-  }
 
   await mkdir(dirname(path), { recursive: true })
-  await writeFile(path, `${JSON.stringify(document, null, 2)}\n`)
+  await writeFile(path, `${JSON.stringify(event, null, 2)}\n`)
   return { path, fresh }
 }
 
@@ -266,7 +261,7 @@ async function main() {
 
   // Before publishing: whether relays accept it has no bearing on the site
   // being able to serve it.
-  const { path: written, fresh } = await writeWellKnown(event, schema, pubkey)
+  const { path: written, fresh } = await writeWellKnown(event)
   console.log(`Wrote ${relative(repoRoot, written)}`)
   console.log('  → /.well-known/curare.to/nostr.json once deployed')
   if (fresh) {

@@ -136,8 +136,8 @@ entirely would have let linkless entries in.
 published to and read from. Signed into the event, so a client that finds the
 schema anywhere knows where a reply belongs — and can't be sent elsewhere by an
 unsigned config file. The publish script signs the relays it is publishing to,
-and the `relays` map in the well-known document is copied from these tags, not
-from configuration, so the two can't disagree.
+and the well-known file is that signed event and nothing else, so there is no
+second copy to disagree with.
 
 The submit form publishes to these and shows them under the list's name. A
 malformed one (`https://`, no host) fails the whole schema: a client that
@@ -215,20 +215,16 @@ static export, so the schema is fetchable from the site itself at
 `/.well-known/curare.to/nostr.json` — no relay, no Nostr client. Commit the file;
 it's what the deployed site serves.
 
-```jsonc
-{
-  "coordinate": "31889:<pubkey>:bitcoin.mov",
-  "names":  { "_": "<pubkey>" },
-  "relays": { "<pubkey>": ["ws://…"] },
-  "schema": { /* the signed kind 31889 event */ }
-}
-```
+The file is the signed kind 31889 event — just the event, nothing around it.
+The curator is its `pubkey`, the coordinate is `31889:<pubkey>:bitcoin.mov`,
+the relays are its `relay` tags. It used to be wrapped in `{ coordinate,
+names, relays, schema }`, but those fields were unsigned, and an unsigned field
+beside a signed event is an invitation to trust the wrong thing. Now every byte
+of the file is under the signature.
 
-`names` and `relays` follow the NIP-05 shape so a reader can pick out the
-curator's pubkey and relay hints without parsing the event. This is **not** the
-NIP-05 path, though: that's `/.well-known/nostr.json` at the domain root, and
-it's what `verifyDomain()` checks. This file says *here is the schema*; NIP-05
-says *here is who I am*.
+This is **not** the NIP-05 path: that's `/.well-known/nostr.json` at the
+domain root, and it's what `verifyDomain()` checks. This file says *here is
+the schema*; NIP-05 says *here is who I am*.
 
 The write happens before publishing, so an unreachable relay doesn't cost you
 the HTTPS copy.

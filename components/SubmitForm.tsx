@@ -8,7 +8,7 @@ import {
   buildSuggestion,
   validateInput,
   videoToInput,
-  parseSuggestion,
+  parseEntry,
   VIDEO_TYPES,
   type SuggestionInput,
   type VideoType,
@@ -94,7 +94,7 @@ export function SubmitForm() {
       .get([...READ_RELAYS], { ids: [editId], kinds: [SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled || !event) return
-        const v = parseSuggestion(event)
+        const v = parseEntry(event)
         if (!v) return
         setInput(videoToInput(v))
         setEditTarget({ d: v.identifier, pubkey: v.pubkey })

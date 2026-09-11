@@ -3,21 +3,21 @@ import type { Video } from '@/lib/nostr/schema'
 /* ------------------------------------------------------------------ *
  * Duplicate-film collapsing.
  *
- * The list is open, so the same film gets submitted by many different people
- * (each author's entry is independently editable). We group suggestions into
+ * The list is open, so the same film gets suggested by many different people
+ * (each author's entry is independently editable). We group entries into
  * one "film" card, keyed by:
  *   1. external id (e.g. imdb:tt2821314) when present, else
  *   2. a normalized title + year.
- * The newest suggestion is the card's representative; the rest are its
- * additional reviews/suggestions, surfaced in the detail view.
+ * The curated entry represents the card when there is one, else the newest;
+ * the rest are its additional reviews, surfaced in the detail view.
  * ------------------------------------------------------------------ */
 
 export interface FilmGroup {
   key: string
-  /** Newest suggestion — represents the film in lists. */
+  /** Represents the film in lists: the curated entry, else the newest. */
   primary: Video
-  /** All suggestions for this film, newest first (includes primary). */
-  suggestions: Video[]
+  /** Every entry for this film, newest first (includes primary). */
+  entries: Video[]
 }
 
 function normalizeTitle(title: string): string {
@@ -29,7 +29,7 @@ function normalizeTitle(title: string): string {
     .replace(/\s+/g, ' ')
 }
 
-/** The grouping key for a single suggestion. */
+/** The grouping key for a single entry. */
 export function groupKey(video: Video): string {
   if (video.externalId) return `ext:${video.externalId.toLowerCase().trim()}`
   const t = normalizeTitle(video.title)
@@ -37,7 +37,7 @@ export function groupKey(video: Video): string {
 }
 
 /**
- * Collapse a flat list of suggestions (already sorted newest-first) into
+ * Collapse a flat list of entries (already sorted newest-first) into
  * de-duplicated film groups, preserving newest-first order by representative.
  */
 export function groupFilms(videos: Video[]): FilmGroup[] {
@@ -56,8 +56,11 @@ export function groupFilms(videos: Video[]): FilmGroup[] {
   }
 
   return order.map((key) => {
-    const suggestions = groups.get(key)!
-    // Input is newest-first, so suggestions[0] is the newest.
-    return { key, primary: suggestions[0], suggestions }
+    const entries = groups.get(key)!
+    // Input is newest-first, so entries[0] is the newest. A curated entry
+    // outranks it: the curator's version represents the film, however many
+    // people suggested it or how recently.
+    const primary = entries.find((v) => v.curated) ?? entries[0]
+    return { key, primary, entries }
   })
 }

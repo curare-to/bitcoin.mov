@@ -13,7 +13,8 @@
     "seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed.mjs",
     "schema:dry": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs --dry-run",
     "schema": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs",
-    "verify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify.mjs"
+    "verify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify.mjs",
+    "curate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/curate.mjs"
   },
   "dependencies": {
     "next": "^15.1.0",

@@ -29,6 +29,23 @@ npm run serve    # preview the static build locally
 For a GitHub Pages sub-path deploy, uncomment `basePath`/`assetPrefix` in
 [`next.config.mjs`](next.config.mjs).
 
+## Three events
+
+| kind | | who signs it |
+|---|---|---|
+| **31889** | **schema** — the fields a suggestion may carry, and the list's identity | the curator |
+| **31888** | **suggestion** — a title someone proposes, in reply to the schema | anyone |
+| **31890** | **curated entry** — a suggestion the curator signed off on | the curator only |
+
+A pubkey publishes a schema. Anyone replies to it with suggestions that satisfy
+it. The pubkey that published the schema goes through them and republishes the
+ones it accepts as curated entries — same fields, signed by the curator,
+pointing back at the suggestion they came from.
+
+Suggesting stays open even on a list nobody else can curate: `visibility`
+governs who may *suggest*, and has no bearing on curation. Curation is the one
+power the schema author doesn't share.
+
 ## The kind 31888 suggestion event (the "spec")
 
 The events users sign to submit a title are **suggestion events**, published as
@@ -210,6 +227,55 @@ truth for all of this — field definitions, the default schema, `buildSchemaTem
 the Node scripts can import it directly and check against the exact same rules
 the browser does.
 
+## The kind 31890 curated entry
+
+A curated entry carries the **same fields as a suggestion** and answers to the
+same schema — it *is* an entry, not an annotation. That's deliberate: curating
+is editorial, so the curator can fix a year or swap a poster on the way through,
+and the curated list stands on its own rather than depending on every suggestion
+still being on a relay.
+
+```jsonc
+{
+  "kind": 31890,
+  "tags": [
+    ["d", "imdb:tt2821314"],       // same `d` as the suggestion — revises in place
+    ["title", "The Rise and Rise of Bitcoin"],
+    // …every other field, exactly as a suggestion carries them
+
+    ["a", "31889:<curator>:bitcoin.mov", "", "root"],   // still a reply to the schema
+    ["a", "31888:<suggester>:imdb:tt2821314", "", "mention"],  // the suggestion accepted
+    ["e", "<suggestion event id>", "", "mention"],      // the exact version seen
+    ["p", "<suggester pubkey>"]                         // credit
+  ]
+}
+```
+
+The source reference is **optional** — a curator may add an entry nobody
+suggested. When present it's validated. The coordinate follows the suggester's
+later edits; the `e` id pins what was actually reviewed.
+
+`verifyCuration` adds two rules to `verifySuggestion`: kind 31890, and signed by
+`schema.namespace`. Keeping the same `d` as the suggestion means re-curating
+revises an entry instead of duplicating it.
+
+```bash
+npm run curate                                   # what's suggested, what's pending
+npm run curate -- --id=<event id> --dry-run      # preview the event
+NOSTR_NSEC=nsec1... npm run curate -- --id=<id>  # curate one
+NOSTR_NSEC=nsec1... npm run curate -- --all      # everything pending
+```
+
+In the app, a curated entry outranks the newest suggestion as the representative
+of its film group, and is marked *Curated* with credit to the original
+suggester. Curation is inert until the schema is published — there's no curator
+until a pubkey has signed a schema event.
+
+> The 37 seeded films are currently published as **suggestions**, by the same
+> key that would publish the schema. Publishing them as curated entries instead
+> would be truer to the model; it's a re-seed, not a code change, and a call
+> worth making deliberately.
+
 ## Notes
 
 - **Editing:** open your own entry and click *Edit this entry* — it reopens the
@@ -220,3 +286,6 @@ the browser does.
   [`lib/nostr/relays.ts`](lib/nostr/relays.ts).
 - **Seeding:** see [SEEDING.md](SEEDING.md). `npm run seed:dry` verifies the
   whole batch against the schema before anything is signed.
+- **Curating:** `npm run curate` lists what's been suggested and what's still
+  pending. It refuses to curate a suggestion that doesn't satisfy the schema,
+  and refuses to sign with a key that isn't the schema's author.

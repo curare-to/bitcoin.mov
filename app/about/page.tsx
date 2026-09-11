@@ -42,9 +42,11 @@ export default function AboutPage() {
           Every suggestion is a reply to a{' '}
           <code className="text-[var(--color-text)]">kind 31889</code> schema
           event, which is what defines which fields a suggestion may carry — so the
-          list is the thread of replies to its own schema. This site reads those
-          replies from a set of public relays and displays them. Nothing is
-          centrally curated: the list you see is the network's.
+          list is the thread of replies to its own schema. The pubkey that
+          published the schema can sign off on a suggestion by republishing it as
+          a <code className="text-[var(--color-text)]">kind 31890</code> curated
+          entry, which is marked as such here. Anyone can suggest, and every
+          suggestion stays readable on the relays either way.
         </p>
       </section>
 

@@ -5,8 +5,8 @@ import type { Event } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools/filter'
 import { pool } from './pool'
 import { READ_RELAYS, SUGGESTION_KIND, NAMESPACE_TAG } from './relays'
-import { parseSuggestion, replaceableKey, type Video } from './schema'
-import { DEFAULT_SCHEMA, schemaAddress } from './schemaEvent'
+import { parseEntry, replaceableKey, type Video } from './schema'
+import { CURATION_KIND, DEFAULT_SCHEMA, schemaAddress } from './schemaEvent'
 
 /* ------------------------------------------------------------------ *
  * The one place a relay subscription lives.
@@ -68,9 +68,10 @@ class VideoStore {
     // React StrictMode's mount/unmount/mount and page navigations).
     if (this.subs.length > 0) return
 
-    // Two ways in, because the namespace hashtag is no longer required:
-    // entries that declare the schema by its `a` coordinate are found by that,
-    // and everything published before schemas existed by the legacy `t` tag.
+    // Three ways in. Suggestions are found by the schema coordinate they reply
+    // to (`#a`), and — for entries published before schemas existed — by the
+    // legacy `t` hashtag, since the namespace tag is no longer required.
+    // Curated entries are a separate kind, so they need their own filter.
     // Overlap is free — `upsert` dedupes by replaceable coordinate.
     const filters: Filter[] = [
       { kinds: [SUGGESTION_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
@@ -78,6 +79,14 @@ class VideoStore {
     const address = schemaAddress(DEFAULT_SCHEMA)
     if (address) {
       filters.push({ kinds: [SUGGESTION_KIND], '#a': [address], limit: 500 })
+      // Curated entries, from the schema's author only. `verifyCuration`
+      // enforces that too; scoping the filter just saves the relay the work.
+      filters.push({
+        kinds: [CURATION_KIND],
+        authors: [DEFAULT_SCHEMA.namespace],
+        '#a': [address],
+        limit: 500,
+      })
     }
 
     this.subs = filters.map((filter) =>
@@ -117,7 +126,7 @@ class VideoStore {
   private rebuild() {
     const videos: Video[] = []
     for (const event of this.events.values()) {
-      const parsed = parseSuggestion(event)
+      const parsed = parseEntry(event)
       if (parsed) videos.push(parsed)
     }
     videos.sort((a, b) => b.createdAt - a.createdAt)

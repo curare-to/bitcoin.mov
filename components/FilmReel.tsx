@@ -34,7 +34,7 @@ export function FilmReel() {
   // Only offer chips for types that actually have films.
   const availableTypes = useMemo(() => {
     const present = new Set<VideoType>()
-    for (const g of allGroups) for (const v of g.suggestions) present.add(v.type)
+    for (const g of allGroups) for (const v of g.entries) present.add(v.type)
     return VIDEO_TYPES.filter((t) => present.has(t))
   }, [allGroups])
 
@@ -45,7 +45,7 @@ export function FilmReel() {
     const filtered =
       type === 'all'
         ? allGroups
-        : allGroups.filter((g) => g.suggestions.some((v) => v.type === type))
+        : allGroups.filter((g) => g.entries.some((v) => v.type === type))
     const ascending = [...filtered].sort((a, b) => {
       const ya = a.primary.year ?? Infinity
       const yb = b.primary.year ?? Infinity
@@ -292,8 +292,8 @@ function FilmFrame({
               </h3>
               <p className="font-condensed text-[10px] text-[var(--color-muted)] mt-0.5">
                 {timeAgo(v.createdAt)}
-                {group.suggestions.length > 1 &&
-                  ` · ×${group.suggestions.length}`}
+                {group.entries.length > 1 &&
+                  ` · ×${group.entries.length}`}
               </p>
             </div>
           </div>

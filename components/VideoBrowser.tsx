@@ -9,7 +9,7 @@ import { FilterBar, type SortMode, type TypeFilter } from './FilterBar'
 function matchesSearch(group: FilmGroup, q: string): boolean {
   if (!q) return true
   const needle = q.toLowerCase()
-  return group.suggestions.some((v) => {
+  return group.entries.some((v) => {
     return (
       v.title.toLowerCase().includes(needle) ||
       (v.director?.toLowerCase().includes(needle) ?? false) ||
@@ -29,7 +29,7 @@ export function VideoBrowser() {
     let result = groupFilms(videos)
 
     if (type !== 'all') {
-      result = result.filter((g) => g.suggestions.some((v) => v.type === type))
+      result = result.filter((g) => g.entries.some((v) => v.type === type))
     }
     if (search.trim()) {
       result = result.filter((g) => matchesSearch(g, search.trim()))

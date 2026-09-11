@@ -100,6 +100,21 @@ Then check what a relay actually holds:
 npm run verify
 ```
 
+## Curating
+
+Once the schema is published, the pubkey that published it can sign off on what
+others have suggested:
+
+```bash
+npm run curate                                     # what's suggested, what's pending
+NOSTR_NSEC=nsec1yourkeyhere npm run curate -- --all # curate everything pending
+```
+
+Curated entries are kind 31890, keep the suggestion's `d`, and carry the same
+fields — so re-curating revises an entry rather than duplicating it. The script
+refuses to curate anything that doesn't satisfy the schema, and refuses to sign
+with a key that isn't the schema's author.
+
 ## Notes
 
 - The seed script imports

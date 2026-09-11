@@ -1,12 +1,16 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure'
 import {
+  CURATION_KIND,
   DEFAULT_SCHEMA,
   buildSuggestionTemplate,
+  curationSource,
   deriveIdentifier as deriveIdentifierFromValues,
   isSafeUrl,
   validateValues,
+  verifyCuration,
   verifySuggestion,
   VIDEO_TYPES,
+  type SuggestionRef,
   type SuggestionSchema,
   type VideoType,
 } from './schemaEvent'
@@ -26,7 +30,7 @@ import {
  * ------------------------------------------------------------------ */
 
 export { VIDEO_TYPES, isSafeUrl }
-export type { VideoType, SuggestionSchema }
+export type { VideoType, SuggestionSchema, SuggestionRef }
 
 export interface WatchLink {
   url: string
@@ -61,6 +65,10 @@ export interface Video {
   hashtags: string[]
   /** Freeform review/description (plain text — never rendered as HTML). */
   description: string
+  /** True when the schema's author signed this off as a curated entry. */
+  curated: boolean
+  /** For a curated entry, the suggestion it came from — null if unprompted. */
+  source: SuggestionRef | null
 }
 
 /* ----------------------------- helpers ----------------------------- */
@@ -84,15 +92,20 @@ export function deriveIdentifier(input: SuggestionInput): string {
 }
 
 /**
- * The replaceable coordinate key `pubkey:d`. Two events with the same key are
- * versions of one entry — keep the newest.
+ * The replaceable coordinate key `kind:pubkey:d`. Two events with the same key
+ * are versions of one entry — keep the newest.
+ *
+ * The kind belongs in the key: a curator who both suggests and curates the same
+ * film publishes two events sharing a pubkey and a `d`, and without the kind
+ * they would overwrite each other.
  */
 export function replaceableKey(event: {
+  kind: number
   pubkey: string
   tags: string[][]
 }): string {
   const d = tagValue(event.tags, 'd') ?? ''
-  return `${event.pubkey}:${d}`
+  return `${event.kind}:${event.pubkey}:${d}`
 }
 
 function coerceType(value: string | null): VideoType {
@@ -118,15 +131,23 @@ function toInt(value: string | null): number | null {
 
 /**
  * Parse a raw Nostr event into a Video, or null if it doesn't satisfy the
- * schema. Every rule applied here — required `d` and `title`, allowed types,
- * https-only posters, length caps — comes from the schema event, so tightening
- * the list is a matter of republishing it rather than editing this file.
+ * schema. Handles both kinds of entry — a suggestion (31888) from anyone, and a
+ * curated entry (31890) from the schema's author — because they carry the same
+ * fields and differ only in who signed them and what they point at.
+ *
+ * Every rule applied here — required `d` and `title`, allowed types, https-only
+ * posters, length caps — comes from the schema event, so tightening the list is
+ * a matter of republishing it rather than editing this file.
  */
-export function parseSuggestion(
+export function parseEntry(
   event: Event,
   schema: SuggestionSchema = DEFAULT_SCHEMA,
 ): Video | null {
-  if (!verifySuggestion(event, schema).ok) return null
+  const curated = event.kind === CURATION_KIND
+  const result = curated
+    ? verifyCuration(event, schema)
+    : verifySuggestion(event, schema)
+  if (!result.ok) return null
 
   const tags = event.tags
   // `d` and `title` are guaranteed by the schema (normalizeSchema forces them);
@@ -154,7 +175,7 @@ export function parseSuggestion(
     id: event.id,
     pubkey: event.pubkey,
     identifier,
-    address: `${schema.kind}:${event.pubkey}:${identifier}`,
+    address: `${event.kind}:${event.pubkey}:${identifier}`,
     createdAt: event.created_at,
     title: (tagValue(tags, 'title') ?? '').trim(),
     year: toInt(tagValue(tags, 'year')),
@@ -167,6 +188,8 @@ export function parseSuggestion(
     lang: lang ? lang.trim() : null,
     hashtags,
     description: (event.content ?? '').trim(),
+    curated,
+    source: curated ? curationSource(event, schema) : null,
   }
 }
 

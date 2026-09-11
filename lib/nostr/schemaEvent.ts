@@ -32,6 +32,17 @@ export const SUGGESTION_KIND = 31888
 /** The kind this module defines: a schema for SUGGESTION_KIND events. */
 export const SCHEMA_KIND = 31889
 
+/**
+ * The kind a *curated* entry is published under.
+ *
+ * Anyone may suggest; only the pubkey that published the schema may curate.
+ * A curated event is a suggestion the curator has signed off on — same fields,
+ * same schema rules, but authored by the curator and (usually) pointing back at
+ * the suggestion it came from. Addressable like the rest, so re-publishing with
+ * the same `d` revises a curation rather than adding a second one.
+ */
+export const CURATION_KIND = 31890
+
 export const VIDEO_TYPES = [
   'movie',
   'documentary',
@@ -300,6 +311,20 @@ export function canSuggest(
   if (!pubkey) return false
   if (schema.namespace && pubkey === schema.namespace) return true
   return schema.authors.includes(pubkey)
+}
+
+/**
+ * May this pubkey publish curated entries under this schema?
+ *
+ * Only the pubkey that published the schema. `visibility` decides who may
+ * *suggest*; curation is not delegated. (Delegated curators would need their
+ * own tag on the schema event — there isn't one yet.)
+ */
+export function canCurate(
+  schema: SuggestionSchema,
+  pubkey: string | null | undefined,
+): boolean {
+  return Boolean(pubkey) && Boolean(schema.namespace) && pubkey === schema.namespace
 }
 
 /** True only for http(s) URLs. Blocks javascript:, data:, etc. */
@@ -850,6 +875,27 @@ export function buildSuggestionTemplate(
   schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: BuildOptions = {},
 ): EventTemplate {
+  const { tags, content } = fieldTags(values, schema, options)
+  tags.push(...replyTags(schema))
+
+  return {
+    kind: schema.kind,
+    created_at: options.createdAt ?? Math.floor(Date.now() / 1000),
+    tags,
+    content,
+  }
+}
+
+/**
+ * Lay a form's values out as tags, per the schema's field list. Shared by the
+ * suggestion and curation builders so a curated entry is the same shape as the
+ * suggestion it came from, and both answer to the same verifier.
+ */
+function fieldTags(
+  values: SuggestionValues,
+  schema: SuggestionSchema,
+  options: BuildOptions,
+): { tags: string[][]; content: string } {
   const tags: string[][] = []
   let content = ''
 
@@ -873,14 +919,127 @@ export function buildSuggestionTemplate(
     }
   }
 
+  return { tags, content }
+}
+
+/**
+ * Split an addressable coordinate `<kind>:<pubkey>:<d>`.
+ *
+ * Only the first two colons separate: a `d` identifier may itself contain them
+ * (ours do — "imdb:tt2821314"), so a naive split mangles the identifier and
+ * miscounts the parts.
+ */
+export function parseCoordinate(
+  value: string,
+): { kind: number; pubkey: string; identifier: string } | null {
+  const match = /^(\d{1,5}):([0-9a-f]{64}):(.+)$/i.exec(value.trim())
+  if (!match) return null
+  return {
+    kind: Number(match[1]),
+    pubkey: match[2].toLowerCase(),
+    identifier: match[3],
+  }
+}
+
+/** Where a curated entry came from: the suggestion the curator accepted. */
+export interface SuggestionRef {
+  /** Event id of the exact version curated — provenance, pinned. */
+  id: string
+  /** Coordinate `31888:<pubkey>:<d>`, which follows the suggester's edits. */
+  address: string
+  /** The suggester, credited with a `p` tag. */
+  pubkey: string
+}
+
+/** Describe a suggestion event so a curated entry can point back at it. */
+export function suggestionRef(
+  event: { id: string; pubkey: string; tags: string[][] },
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
+): SuggestionRef | null {
+  const tags = Array.isArray(event.tags) ? event.tags : []
+  const d = (tags.find((t) => t[0] === 'd' && typeof t[1] === 'string')?.[1] ?? '').trim()
+  if (!d || !event.pubkey) return null
+  return {
+    id: event.id,
+    pubkey: event.pubkey,
+    address: `${schema.kind}:${event.pubkey}:${d}`,
+  }
+}
+
+/** Read the source reference back off a curated entry. */
+export function curationSource(
+  event: SuggestionLike,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
+): SuggestionRef | null {
+  const tags = Array.isArray(event.tags) ? event.tags : []
+  const address = tags.find(
+    (t) => t[0] === 'a' && typeof t[1] === 'string' && t[1].startsWith(`${schema.kind}:`),
+  )?.[1]
+  const coordinate = address ? parseCoordinate(address) : null
+  if (!address || !coordinate) return null
+  const id = tags.find((t) => t[0] === 'e' && typeof t[1] === 'string')?.[1] ?? ''
+  return { id, address, pubkey: coordinate.pubkey }
+}
+
+/** Both tags: the coordinate (follows edits) and the id (pins what was seen). */
+function sourceTags(source: SuggestionRef | null): string[][] {
+  if (!source) return []
+  const tags: string[][] = [['a', source.address, '', 'mention']]
+  if (source.id) tags.push(['e', source.id, '', 'mention'])
+  if (source.pubkey) tags.push(['p', source.pubkey])
+  return tags
+}
+
+/**
+ * Build the unsigned curated entry. Same field layout as a suggestion and the
+ * same reply-to-schema root — a curated entry *is* an entry — plus a reference
+ * to the suggestion it came from.
+ *
+ * `values` rather than the source event, because curating is editorial: the
+ * curator can fix the year or swap the poster on the way through. Pass
+ * `options.identifier` to keep the suggestion's `d`, so the curated entry
+ * lands on the same coordinate every time it's revised.
+ *
+ * `source` is optional — a curator may add an entry nobody suggested.
+ */
+export function buildCurationTemplate(
+  values: SuggestionValues,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  source: SuggestionRef | null = null,
+  options: BuildOptions = {},
+): EventTemplate {
+  const { tags, content } = fieldTags(values, schema, options)
   tags.push(...replyTags(schema))
+  tags.push(...sourceTags(source))
 
   return {
-    kind: schema.kind,
+    kind: CURATION_KIND,
     created_at: options.createdAt ?? Math.floor(Date.now() / 1000),
     tags,
     content,
   }
+}
+
+/**
+ * Read a schema-valid event back into the values that would rebuild it — the
+ * reverse of `fieldTags`. Lets the curator take a suggestion off a relay,
+ * adjust it, and republish it as a curated entry without the app's parsing
+ * layer, which plain Node can't import.
+ */
+export function eventToValues(
+  event: SuggestionLike,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
+): SuggestionValues {
+  const subject: SuggestionLike = {
+    ...event,
+    tags: Array.isArray(event.tags) ? event.tags : [],
+  }
+  const values: SuggestionValues = {}
+  for (const field of schema.fields) {
+    const found = valuesOf(field, subject)
+    if (found.length > 0) values[field.name] = found[0]
+  }
+  return values
 }
 
 /** `max` caps characters for text-ish fields and numbers for numeric ones. */
@@ -1001,14 +1160,76 @@ export function verifySuggestion(
   schema: SuggestionSchema = DEFAULT_SCHEMA,
   options: { pubkey?: string } = {},
 ): SchemaVerification {
+  return verifyEntry(event, schema, schema.kind, options)
+}
+
+/**
+ * Verify a *curated* entry. Same fields and the same reply-to-schema root as a
+ * suggestion — a curated entry is an entry, not an annotation — with two rules
+ * on top:
+ *
+ * 1. it is kind 31890, and
+ * 2. it is signed by the pubkey that published the schema. Curation is the one
+ *    power the schema author does not share; `visibility` governs who may
+ *    *suggest*, and has no bearing here.
+ *
+ * The reference back to the suggestion it came from is optional: a curator may
+ * add an entry nobody suggested. When present it must be well formed.
+ */
+export function verifyCuration(
+  event: SuggestionLike,
+  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  options: { pubkey?: string } = {},
+): SchemaVerification {
+  const result = verifyEntry(event, schema, CURATION_KIND, options)
+  const violations = [...result.violations]
+  const tags = Array.isArray(event.tags) ? event.tags : []
+
+  const author = options.pubkey ?? event.pubkey
+  if (!schema.namespace) {
+    violations.push({
+      field: 'curator',
+      message: 'This schema has no published author, so nothing can be curated under it.',
+    })
+  } else if (!author) {
+    violations.push({ field: 'curator', message: 'A curated entry needs a known author.' })
+  } else if (!canCurate(schema, author)) {
+    violations.push({
+      field: 'curator',
+      message: 'Only the pubkey that published the schema may curate.',
+    })
+  }
+
+  // A malformed source reference is worse than none: it credits the wrong
+  // person, or points at an entry that was never suggested.
+  const source = tags.find(
+    (t) => t[0] === 'a' && typeof t[1] === 'string' && t[1].startsWith(`${schema.kind}:`),
+  )
+  if (source && !parseCoordinate(source[1])) {
+    violations.push({
+      field: 'source',
+      message: `"${source[1]}" is not a valid suggestion coordinate.`,
+    })
+  }
+
+  return { ok: violations.length === 0, violations }
+}
+
+/** Shared field/reply checking for both suggestions and curated entries. */
+function verifyEntry(
+  event: SuggestionLike,
+  schema: SuggestionSchema,
+  expectedKind: number,
+  options: { pubkey?: string },
+): SchemaVerification {
   const violations: SchemaViolation[] = []
   const tags = Array.isArray(event.tags) ? event.tags : []
   const subject: SuggestionLike = { ...event, tags }
 
-  if (event.kind !== schema.kind) {
+  if (event.kind !== expectedKind) {
     violations.push({
       field: 'kind',
-      message: `Expected kind ${schema.kind}, got ${event.kind}.`,
+      message: `Expected kind ${expectedKind}, got ${event.kind}.`,
     })
   }
 

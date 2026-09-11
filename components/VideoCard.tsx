@@ -6,7 +6,7 @@ import type { FilmGroup } from '@/lib/util/dedup'
 export function VideoCard({ group }: { group: FilmGroup }) {
   const v = group.primary
   const duration = formatDuration(v.durationSeconds)
-  const extraSubmissions = group.suggestions.length - 1
+  const extraEntries = group.entries.length - 1
   const landscape = isLandscapeThumb(v.image)
 
   return (
@@ -47,10 +47,10 @@ export function VideoCard({ group }: { group: FilmGroup }) {
           </p>
         )}
 
-        {extraSubmissions > 0 && (
+        {extraEntries > 0 && (
           <p className="font-condensed text-[11px] text-[var(--color-btc-dim)] mt-1">
-            +{extraSubmissions} more suggestion
-            {extraSubmissions === 1 ? '' : 's'}
+            +{extraEntries} more suggestion
+            {extraEntries === 1 ? '' : 's'}
           </p>
         )}
       </div>

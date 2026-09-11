@@ -13,19 +13,20 @@ import {
   SCHEMA_KIND,
   parseSchemaEvent,
 } from '../lib/nostr/schemaEvent.ts'
+import { WRITE_RELAYS } from '../lib/nostr/relayList.ts'
 
 const args = process.argv.slice(2)
 
 /**
- * Relays every script reads and writes. Override with one or more
- * `--relay=ws://…` so a seed run can be aimed at a scratch relay instead of
- * whatever the app is pointed at.
+ * Relays every script reads and writes: the same list the app uses, from
+ * lib/nostr/relayList.ts, so seeding lands where the site looks. Override with
+ * one or more `--relay=ws://…` to aim a run at a scratch relay instead.
  */
 export const RELAYS = (() => {
   const given = args
     .filter((a) => a.startsWith('--relay='))
     .map((a) => a.slice('--relay='.length))
-  return given.length > 0 ? given : ['ws://localhost:10547']
+  return given.length > 0 ? given : [...WRITE_RELAYS]
 })()
 
 /** `--name=value`, repeatable. Returns every value given. */

@@ -13,10 +13,11 @@ const nextConfig = {
   // on static hosts that don't rewrite extensions.
   trailingSlash: true,
 
-  // Uncomment + set to the repo name when hosting under a GitHub Pages sub-path
-  // (e.g. https://user.github.io/bitcoin.mov):
-  // basePath: '/bitcoin.mov',
-  // assetPrefix: '/bitcoin.mov/',
+  // Only needed when hosting under a sub-path (https://user.github.io/repo)
+  // rather than a domain root. Set at build time — the same variable is read
+  // by the well-known fetch in lib/nostr/useSiteSchema.ts, so both stay in
+  // step:  NEXT_PUBLIC_BASE_PATH=/bitcoin.mov npm run build
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
 }
 
 export default nextConfig

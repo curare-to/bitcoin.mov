@@ -131,6 +131,37 @@ against the published schema, and says why anything is being rejected. Then open
 the app (`npm run dev`) — curated entries are marked, and represent their film
 wherever a title was suggested more than once.
 
+## Before going live
+
+The site is a static export that talks to relays from the browser, so
+deploying it is mostly a matter of pointing it somewhere real. In order:
+
+1. **Relays.** Edit [`lib/nostr/relayList.ts`](lib/nostr/relayList.ts) — the
+   one list both the app and the scripts use. They must be `wss://`: GitHub
+   Pages is https, and a browser refuses an insecure `ws://` socket from an
+   https page, so the site would connect to nothing and show nothing.
+2. **Re-seed onto them.** Nothing exists on the new relays yet:
+   `NOSTR_NSEC=nsec1… npm run seed`. Because the relay list is shared, no
+   `--relay=` flag is needed.
+3. **Commit the schema file.** `seed:schema` writes
+   `public/.well-known/curare.to/nostr.json`, and the submit page refuses
+   submissions without it. It is currently in `.gitignore`; the deploy builds
+   from the repo, so an ignored file is a missing file. It holds only public
+   data — the signed event and your pubkey — so committing it is safe.
+   (Generating it in CI instead would mean putting your signing key in CI.
+   Don't.)
+4. **`SCHEMA_NAMESPACE`** in `lib/nostr/schemaEvent.ts` must be the key you
+   seeded with. It already is if you haven't changed keys.
+5. **Enable Pages.** Settings → Pages → Source: *GitHub Actions*. The workflow
+   in `.github/workflows/pages.yml` deploys on push to `main`.
+6. **Sub-path or domain?** Under `user.github.io/repo` set
+   `NEXT_PUBLIC_BASE_PATH=/repo` in the workflow's build step; under a custom
+   domain leave it unset and add the domain in Settings → Pages.
+
+`public/.nojekyll` is already there: without it GitHub's Jekyll pass silently
+drops every `_`- and `.`-prefixed path — which is `_next/` (all the JS) and
+`.well-known/` (the schema).
+
 ## Curating for real
 
 `npm run seed:curated` is the bulk version. The actual editorial workflow is:

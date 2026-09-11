@@ -19,11 +19,12 @@ import {
  * bundled DEFAULT_SCHEMA. The bundled copy is what the *reader* side uses to
  * verify entries off relays; this is what a *writer* is handed to fill in.
  *
- * Same-origin, so a relative path. If `basePath` is ever set in next.config,
- * prefix it here.
+ * Same-origin. `<Link>` and asset URLs get next.config's `basePath` applied
+ * automatically; a hand-written fetch does not, so it is prefixed here from
+ * the same variable next.config reads (NEXT_PUBLIC_* is inlined at build).
  * ------------------------------------------------------------------ */
 
-export const SITE_SCHEMA_PATH = '/.well-known/curare.to/nostr.json'
+export const SITE_SCHEMA_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/.well-known/curare.to/nostr.json`
 
 export type SiteSchemaState =
   | { status: 'loading'; schema: null; reason: null }

@@ -3,16 +3,10 @@ import { NAMESPACE_HASHTAG, SUGGESTION_KIND } from './schemaEvent'
 export { SUGGESTION_KIND }
 
 /**
- * Relay set.
- *
- * Currently pointed at a single local relay for development. Publishing is
- * best-effort (Promise.allSettled), so a relay being down is not fatal.
- * Note: `ws://` (not `wss://`) only works when the app itself is served over
- * http — a browser on an https page blocks insecure-websocket connections.
+ * Relay set — defined in relayList.ts so the seed scripts share it. Publishing
+ * is best-effort, so a relay being down is not fatal.
  */
-export const READ_RELAYS = ['ws://localhost:10547'] as const
-
-export const WRITE_RELAYS = ['ws://localhost:10547'] as const
+export { READ_RELAYS, WRITE_RELAYS } from './relayList'
 
 /**
  * Legacy discovery hashtag, kept on every suggestion we write and still used

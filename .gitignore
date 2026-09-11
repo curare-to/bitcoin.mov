@@ -24,3 +24,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+public/.well-known/curare.to/nostr.json

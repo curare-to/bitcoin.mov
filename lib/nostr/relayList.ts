@@ -26,8 +26,7 @@ const PRODUCTION = process.env.NODE_ENV === 'production'
 
 const LOCAL = ['ws://localhost:10547'] as const
 
-/** Swap for your own. These are two long-lived, open public relays. */
-const PUBLIC = ['wss://relay.damus.io', 'wss://nos.lol'] as const
+const PUBLIC = ['wss://ephemeral.mantra.press'] as const
 
 export const READ_RELAYS: readonly string[] = PRODUCTION ? PUBLIC : LOCAL
 

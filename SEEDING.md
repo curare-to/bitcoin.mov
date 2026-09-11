@@ -138,8 +138,8 @@ deploying it is mostly a matter of pointing it somewhere real. In order:
 
 1. **Relays.** [`lib/nostr/relayList.ts`](lib/nostr/relayList.ts) switches on
    `NODE_ENV`: the dev server and any script run without `NODE_ENV=production`
-   use the local relay; the built export and a production script run use the
-   public ones. It ships with two well-known open relays — swap in your own.
+   use the local relay; the built export and a production script run use
+   `wss://ephemeral.mantra.press`.
    They must be `wss://`: GitHub Pages is https, and a browser refuses an
    insecure `ws://` socket from an https page, so the site would connect to
    nothing and show nothing.
@@ -151,7 +151,7 @@ deploying it is mostly a matter of pointing it somewhere real. In order:
    ```
 
    Every script prints where it's publishing and which mode chose it —
-   `wss://relay.damus.io, wss://nos.lol (production)` — before signing
+   `wss://ephemeral.mantra.press (production)` — before signing
    anything. Without `NODE_ENV=production` it stays local, on a fresh clone
    too; publishing is the one step that can't be taken back.
 3. **Commit the schema file.** `seed:schema` writes

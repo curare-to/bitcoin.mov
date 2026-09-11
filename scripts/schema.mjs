@@ -34,6 +34,7 @@
  * (same author + d) rather than adding a second schema.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
@@ -191,6 +192,10 @@ function printSchema(schema) {
  */
 async function writeWellKnown(event, schema, pubkey) {
   const path = join(repoRoot, ...WELL_KNOWN)
+  // Next resolves `public/` once at startup: a dev server that began before the
+  // directory existed will 404 everything in it until restarted. The repo keeps
+  // a public/.gitkeep so this normally can't happen, but say so if it does.
+  const fresh = !existsSync(join(repoRoot, 'public'))
   const document = {
     coordinate: `${SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
     names: { _: pubkey },
@@ -200,7 +205,7 @@ async function writeWellKnown(event, schema, pubkey) {
 
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, `${JSON.stringify(document, null, 2)}\n`)
-  return path
+  return { path, fresh }
 }
 
 async function main() {
@@ -250,9 +255,13 @@ async function main() {
 
   // Before publishing: whether relays accept it has no bearing on the site
   // being able to serve it.
-  const written = await writeWellKnown(event, schema, pubkey)
+  const { path: written, fresh } = await writeWellKnown(event, schema, pubkey)
   console.log(`Wrote ${relative(repoRoot, written)}`)
-  console.log('  → /.well-known/curare.to/nostr.json once deployed\n')
+  console.log('  → /.well-known/curare.to/nostr.json once deployed')
+  if (fresh) {
+    console.log('  ! public/ did not exist — restart `npm run dev` to serve it')
+  }
+  console.log()
 
   console.log(`Publishing schema to ${WRITE_RELAYS.length} relays…\n`)
 

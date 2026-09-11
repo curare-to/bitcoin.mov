@@ -11,6 +11,11 @@
  * the coordinate `31889:<pubkey>:bitcoin.mov` identifies this schema and no
  * other. Nothing global is claimed, so nothing can be squatted.
  *
+ * Publishing also writes the signed event to
+ * public/.well-known/curare.to/nostr.json, which the static export copies into
+ * the build — so the schema is fetchable over HTTPS from the site itself, not
+ * only from a relay. Commit that file: it is what the deployed site serves.
+ *
  *   # See the schema and the event it produces (no key, no network):
  *   npm run schema:dry
  *
@@ -28,9 +33,13 @@
  * Kind 31889 is addressable, so re-running replaces your previous version
  * (same author + d) rather than adding a second schema.
  */
+import { mkdir, writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+import { dirname, join, relative } from 'node:path'
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
+import { RELAYS, publish } from './lib.mjs'
 import {
   DEFAULT_SCHEMA,
   SCHEMA_CAP,
@@ -44,7 +53,22 @@ import {
   verifySchemaEvent,
 } from '../lib/nostr/schemaEvent.ts'
 
-const WRITE_RELAYS = ['ws://localhost:10547']
+// Shared with every other script, so `--relay=ws://…` aims a run somewhere else.
+const WRITE_RELAYS = RELAYS
+
+/**
+ * Where the signed schema is served over plain HTTPS, as well as pushed to
+ * relays: `public/` is copied verbatim into the static export, so this lands at
+ * `/.well-known/curare.to/nostr.json` on the deployed site.
+ *
+ * A relay can be down, rate-limited, or simply not one a reader happens to use.
+ * The schema is the one document everything else is checked against, so it is
+ * worth being fetchable from the site itself with no Nostr client at all.
+ */
+const WELL_KNOWN = ['public', '.well-known', 'curare.to', 'nostr.json']
+
+const here = dirname(fileURLToPath(import.meta.url))
+const repoRoot = join(here, '..')
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -155,6 +179,30 @@ function printSchema(schema) {
   }
 }
 
+/**
+ * Write the signed schema to the well-known path.
+ *
+ * `names` and `relays` follow the NIP-05 shape, so a reader can pick the
+ * curator's pubkey and relay hints out of it without understanding anything
+ * else in the file. Note this is *not* the NIP-05 path — that is
+ * `/.well-known/nostr.json` at the domain root, and `verifyDomain()` in
+ * schemaEvent.ts is what checks it. This file says "here is the schema";
+ * NIP-05 says "here is who I am".
+ */
+async function writeWellKnown(event, schema, pubkey) {
+  const path = join(repoRoot, ...WELL_KNOWN)
+  const document = {
+    coordinate: `${SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
+    names: { _: pubkey },
+    relays: { [pubkey]: [...WRITE_RELAYS] },
+    schema: event,
+  }
+
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, `${JSON.stringify(document, null, 2)}\n`)
+  return path
+}
+
 async function main() {
   const schema = resolveSchema()
   const template = buildSchemaTemplate(schema)
@@ -199,11 +247,17 @@ async function main() {
   }
 
   console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
+
+  // Before publishing: whether relays accept it has no bearing on the site
+  // being able to serve it.
+  const written = await writeWellKnown(event, schema, pubkey)
+  console.log(`Wrote ${relative(repoRoot, written)}`)
+  console.log('  → /.well-known/curare.to/nostr.json once deployed\n')
+
   console.log(`Publishing schema to ${WRITE_RELAYS.length} relays…\n`)
 
   const pool = new SimplePool()
-  const results = await Promise.allSettled(pool.publish([...WRITE_RELAYS], event))
-  const accepted = results.filter((r) => r.status === 'fulfilled').length
+  const accepted = await publish(pool, event, WRITE_RELAYS)
   console.log(
     `${accepted > 0 ? '✓' : '✗'} ${schema.identifier} — ${accepted}/${WRITE_RELAYS.length} relays`,
   )

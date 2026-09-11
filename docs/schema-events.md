@@ -193,6 +193,32 @@ events, set `SCHEMA_NAMESPACE` in
 [`lib/nostr/schemaEvent.ts`](../lib/nostr/schemaEvent.ts) to the pubkey it
 prints.
 
+### Served over HTTPS too
+
+Publishing writes the signed event to
+`public/.well-known/curare.to/nostr.json`. `public/` is copied verbatim into the
+static export, so the schema is fetchable from the site itself at
+`/.well-known/curare.to/nostr.json` — no relay, no Nostr client. Commit the file;
+it's what the deployed site serves.
+
+```jsonc
+{
+  "coordinate": "31889:<pubkey>:bitcoin.mov",
+  "names":  { "_": "<pubkey>" },
+  "relays": { "<pubkey>": ["ws://…"] },
+  "schema": { /* the signed kind 31889 event */ }
+}
+```
+
+`names` and `relays` follow the NIP-05 shape so a reader can pick out the
+curator's pubkey and relay hints without parsing the event. This is **not** the
+NIP-05 path, though: that's `/.well-known/nostr.json` at the domain root, and
+it's what `verifyDomain()` checks. This file says *here is the schema*; NIP-05
+says *here is who I am*.
+
+The write happens before publishing, so an unreachable relay doesn't cost you
+the HTTPS copy.
+
 > Setting `SCHEMA_NAMESPACE` also makes the reply root **mandatory** on
 > suggestions, so entries published before the schema existed stop verifying.
 > Re-run `npm run seed` — everything is addressable, so entries are replaced by

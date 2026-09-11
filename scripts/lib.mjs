@@ -124,10 +124,25 @@ export async function loadSchema(pool, relays = RELAYS) {
   return { schema: published ?? DEFAULT_SCHEMA, published: Boolean(published) }
 }
 
-/** Publish one event; returns how many relays took it. */
+/**
+ * Publish one event; returns how many relays actually took it.
+ *
+ * `pool.publish()` does not reject when a relay is unreachable — it *resolves*
+ * with the string "connection failure: …" (see the pool's ensureRelay catch in
+ * nostr-tools). Counting fulfilled promises therefore reports every dead relay
+ * as a success. A relay that rejects the event rejects the promise, so both
+ * failure modes have to be excluded.
+ *
+ * On success the relay's OK `reason` comes back, and that is routinely the
+ * empty string — so this cannot test for a truthy value either.
+ */
 export async function publish(pool, event, relays = RELAYS) {
   const results = await Promise.allSettled(pool.publish([...relays], event))
-  return results.filter((r) => r.status === 'fulfilled').length
+  return results.filter(
+    (r) =>
+      r.status === 'fulfilled' &&
+      !String(r.value ?? '').startsWith('connection failure:'),
+  ).length
 }
 
 /** Sockets keep the event loop alive; leave deliberately. */

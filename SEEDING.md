@@ -53,6 +53,26 @@ Publishes the kind 31889 schema. **Your pubkey becomes the curator**: the
 coordinate `31889:<your pubkey>:bitcoin.mov` is what everything else replies to,
 and only that key may curate.
 
+It also writes the signed event to
+`public/.well-known/curare.to/nostr.json`, which the static export copies into
+the build — so the schema is fetchable from the site itself at
+**`/.well-known/curare.to/nostr.json`**, with no relay and no Nostr client
+involved. **Commit that file**: it's what the deployed site serves.
+
+```jsonc
+{
+  "coordinate": "31889:<pubkey>:bitcoin.mov",
+  "names":  { "_": "<pubkey>" },            // NIP-05 shape, so the curator's
+  "relays": { "<pubkey>": ["ws://…"] },     // key and relays are easy to find
+  "schema": { /* the signed kind 31889 event */ }
+}
+```
+
+The file is written *before* publishing, so a relay being down doesn't cost you
+the HTTPS copy. It is not the NIP-05 path — that's `/.well-known/nostr.json` at
+the domain root, and it answers a different question ("who am I", rather than
+"here's the schema").
+
 Same script as `npm run schema`, which also takes the identity flags
 (`--name=`, `--domain=`, `--picture=`) — see the README.
 

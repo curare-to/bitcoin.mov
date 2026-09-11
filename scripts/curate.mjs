@@ -36,8 +36,7 @@ import {
   verifyCuration,
   verifySuggestion,
 } from '../lib/nostr/schemaEvent.ts'
-
-const RELAYS = ['ws://localhost:10547']
+import { RELAYS, publish } from './lib.mjs'
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -229,8 +228,7 @@ async function main() {
       continue
     }
     const event = finalizeEvent(template, sk)
-    const results = await Promise.allSettled(pool.publish([...RELAYS], event))
-    const accepted = results.filter((r) => r.status === 'fulfilled').length
+    const accepted = await publish(pool, event)
     if (accepted > 0) ok += 1
     console.log(
       `${accepted > 0 ? '✓' : '✗'} ${row.title} — ${accepted}/${RELAYS.length} relays`,

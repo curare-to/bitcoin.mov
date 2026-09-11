@@ -166,9 +166,10 @@ The store subscribes to curated events separately, scoped to the curator:
 { kinds: [31890], authors: [curator], "#a": [curatedSchemaAddress] }
 ```
 
-That filter only runs once `CURATED_SCHEMA_NAMESPACE` is set. Until it is, the app reads
-no curated events at all — which now leaves the home page empty, since that is
-all it lists. Setting it is part of publishing a schema, not an optional extra.
+`curator` is the pubkey that signed the schema at
+`/.well-known/curare.to/nostr.json` — nothing is hardcoded. The store fetches
+that file before subscribing to anything, so a site that doesn't serve one
+reads no events at all and the home page says *No list published*.
 
 ## Curating
 

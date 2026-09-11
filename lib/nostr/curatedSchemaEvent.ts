@@ -211,24 +211,6 @@ export interface CuratedSchema {
 }
 
 /**
- * The pubkey that publishes the canonical bitcoin.mov schema.
- *
- * Set to the pubkey that published the schema on the dev relay. Until this is
- * set there is no coordinate for a suggestion to reply to, no curator, and the
- * app can neither require the reply nor read curated events at all — which
- * would leave the home page permanently empty, since it lists curated entries.
- *
- * Change it when you publish the schema under a different key.
- *
- * Setting it turns the reply into a requirement, which means suggestions
- * published *before* the schema existed stop verifying. Re-run `npm run seed`
- * after publishing: kind 31888 is addressable, so re-seeding replaces each
- * entry by its `d` rather than duplicating it.
- */
-export const CURATED_SCHEMA_NAMESPACE =
-  '94318e82c0a05acebded80aedb368932625e769430161dacd0dc3ade7ba52793'
-
-/**
  * Discovery hashtag kept on suggestions for backwards compatibility. It is
  * **not** the namespace and is not required — the pubkey coordinate is.
  */
@@ -450,7 +432,10 @@ const MANDATORY_FIELDS: [string, FieldDef][] = [
  */
 export const DEFAULT_CURATED_SCHEMA: CuratedSchema = normalizeCuratedSchema({
   identifier: 'bitcoin.mov',
-  namespace: CURATED_SCHEMA_NAMESPACE,
+  // The curator is whoever signs and publishes this. The app learns that from
+  // the signed event it fetches at /.well-known/curare.to/nostr.json, and the
+  // scripts from the key they sign with — it is never written into source.
+  namespace: '',
   title: 'bitcoin.mov suggestion',
   name: 'bitcoin.mov',
   description:
@@ -900,8 +885,8 @@ function derivedValues(
  * per the usual reply conventions. Neither is load-bearing — `a` is what
  * `verifyCuratedSuggestion` requires and what relays are queried on (`#a`).
  *
- * An unpublished schema has no coordinate to reply to, so this is empty until
- * CURATED_SCHEMA_NAMESPACE is set.
+ * An unpublished schema has no coordinate to reply to, so this is empty for
+ * a schema with no `namespace` — the bundled default, before publishing.
  */
 export function replyTags(schema: CuratedSchema): string[][] {
   const address = curatedSchemaAddress(schema)
@@ -1288,9 +1273,9 @@ function verifyEntry(
 
   // A suggestion is a reply to its schema, so the root `a` tag is required —
   // but only once the schema has a coordinate to reply to. An unpublished
-  // schema (empty CURATED_SCHEMA_NAMESPACE) has nothing to point at, so suggestions
-  // made before it was published stay valid until it is. Only schema
-  // coordinates count here; entries carry `a` tags for other reasons too.
+  // schema (no `namespace`) has nothing to point at, so suggestions made
+  // before it was published stay valid until it is. Only schema coordinates
+  // count here; entries carry `a` tags for other reasons too.
   const address = curatedSchemaAddress(schema)
   if (address) {
     const roots = tags

@@ -91,11 +91,12 @@ export function SubmitForm({ schema }: { schema: CuratedSchema }) {
       return
     }
     let cancelled = false
+    const relays = schema.relays.length > 0 ? [...schema.relays] : [...READ_RELAYS]
     pool
-      .get([...READ_RELAYS], { ids: [editId], kinds: [CURATED_SUGGESTION_KIND] })
+      .get(relays, { ids: [editId], kinds: [CURATED_SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled || !event) return
-        const v = parseEntry(event)
+        const v = parseEntry(event, schema)
         if (!v) return
         setInput(videoToInput(v))
         setEditTarget({ d: v.identifier, pubkey: v.pubkey })
@@ -105,7 +106,7 @@ export function SubmitForm({ schema }: { schema: CuratedSchema }) {
     return () => {
       cancelled = true
     }
-  }, [editId, prefilled, videos])
+  }, [editId, prefilled, videos, schema])
 
   function set<K extends keyof CuratedSuggestionInput>(key: K, value: CuratedSuggestionInput[K]) {
     setInput((prev) => ({ ...prev, [key]: value }))

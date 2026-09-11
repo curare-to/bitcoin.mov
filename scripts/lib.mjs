@@ -6,7 +6,10 @@
  * needs: relays, key handling, and talking to a pool.
  */
 import { createHash } from 'node:crypto'
-import { getPublicKey } from 'nostr-tools/pure'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { getPublicKey, verifyEvent } from 'nostr-tools/pure'
 import * as nip19 from 'nostr-tools/nip19'
 import {
   DEFAULT_CURATED_SCHEMA,
@@ -120,20 +123,60 @@ export function seededAuthors(salt, count) {
   })
 }
 
+const WELL_KNOWN = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..', 'public', '.well-known', 'curare.to', 'nostr.json',
+)
+
+/**
+ * The curator this site is committed to: the pubkey that signed the schema in
+ * public/.well-known/curare.to/nostr.json. That file is what the deployed app
+ * reads, so it is what the scripts scope to as well — otherwise `verify` could
+ * pass a relay the app would show as empty. Null before the file exists.
+ */
+export function wellKnownCurator() {
+  try {
+    const doc = JSON.parse(readFileSync(WELL_KNOWN, 'utf8'))
+    const event = doc?.schema
+    if (!event || !verifyEvent(event)) return null
+    return parseCuratedSchemaEvent(event) ? event.pubkey : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * The schema as published on the relay, falling back to the bundled default.
  *
- * The relay wins: that's the copy suggestions actually reply to, and the one
- * whose author is the curator. Returns `{ schema, published }` so callers can
- * tell the difference — most of them need to.
+ * Scoped to the well-known curator when the site has one: the schema is the
+ * one *that* pubkey published, and any other schema on the relay under the
+ * same identifier is reported, not silently picked. Before the site has a
+ * well-known file — the very first `seed:schema` — the newest schema wins,
+ * since there is nothing yet to prefer.
+ *
+ * Returns `{ schema, published, curator, others }`.
  */
 export async function loadSchema(pool, relays = RELAYS) {
+  const curator = wellKnownCurator()
   const events = await pool.querySync(relays, { kinds: [CURATED_SCHEMA_KIND], limit: 50 })
-  const published = events
+  const candidates = events
     .map(parseCuratedSchemaEvent)
     .filter((s) => s !== null && s.identifier === DEFAULT_CURATED_SCHEMA.identifier)
-    .sort((a, b) => (b.source?.createdAt ?? 0) - (a.source?.createdAt ?? 0))[0]
-  return { schema: published ?? DEFAULT_CURATED_SCHEMA, published: Boolean(published) }
+    .sort((a, b) => (b.source?.createdAt ?? 0) - (a.source?.createdAt ?? 0))
+
+  const published = curator
+    ? candidates.find((s) => s.namespace === curator)
+    : candidates[0]
+  const others = [...new Set(
+    candidates.filter((s) => s.namespace !== published?.namespace).map((s) => s.namespace),
+  )]
+
+  return {
+    schema: published ?? DEFAULT_CURATED_SCHEMA,
+    published: Boolean(published),
+    curator,
+    others,
+  }
 }
 
 /**

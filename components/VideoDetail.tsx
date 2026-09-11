@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import type { Event } from 'nostr-tools/pure'
 import { pool } from '@/lib/nostr/pool'
 import { READ_RELAYS, CURATED_SUGGESTION_KIND } from '@/lib/nostr/relays'
+import { CURATED_CANONICAL_KIND } from '@/lib/nostr/curatedSchemaEvent'
 import { parseEntry, type Video } from '@/lib/nostr/schema'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
@@ -24,7 +25,7 @@ type FetchState = 'idle' | 'loading' | 'found' | 'missing'
 export function VideoDetail() {
   const params = useSearchParams()
   const id = params.get('id')
-  const { videos } = useVideos()
+  const { videos, schema, schemaStatus } = useVideos()
   const { pubkey } = useNip07()
 
   // Prefer an event already in the store; otherwise fetch it directly by id.
@@ -44,13 +45,24 @@ export function VideoDetail() {
       setState('found')
       return
     }
+    // Wait for the site's schema: it decides which curator's list this is,
+    // what the entry is verified against, and which relays to ask.
+    if (schemaStatus === 'loading') return
+    if (!schema) {
+      setState('missing')
+      return
+    }
     let cancelled = false
     setState('loading')
+    const relays = schema.relays.length > 0 ? [...schema.relays] : [...READ_RELAYS]
     pool
-      .get([...READ_RELAYS], { ids: [id], kinds: [CURATED_SUGGESTION_KIND] })
+      .get(relays, {
+        ids: [id],
+        kinds: [CURATED_SUGGESTION_KIND, CURATED_CANONICAL_KIND],
+      })
       .then((event: Event | null) => {
         if (cancelled) return
-        const parsed = event ? parseEntry(event) : null
+        const parsed = event ? parseEntry(event, schema) : null
         setFetched(parsed)
         setState(parsed ? 'found' : 'missing')
       })
@@ -60,7 +72,7 @@ export function VideoDetail() {
     return () => {
       cancelled = true
     }
-  }, [id, fromStore])
+  }, [id, fromStore, schema, schemaStatus])
 
   const video = fromStore ?? fetched
 

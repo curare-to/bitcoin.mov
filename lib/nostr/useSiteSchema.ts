@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { verifyEvent, type Event } from 'nostr-tools/pure'
 import {
   parseCuratedSchemaEvent,
-  CURATED_SCHEMA_NAMESPACE,
   type CuratedSchema,
 } from './curatedSchemaEvent'
 
@@ -12,12 +11,15 @@ import {
  * The schema this site has actually published.
  *
  * `npm run seed:schema` writes the signed kind 31889 event to
- * public/.well-known/curare.to/nostr.json, and the static export serves it. Its
- * presence is what it means for the site to be accepting suggestions: no file,
- * no published schema, nothing to submit to. So the submit form fetches it,
- * gates on it, and — when it's there — is driven by it, rather than by the
- * bundled DEFAULT_CURATED_SCHEMA. The bundled copy is what the *reader* side uses to
- * verify entries off relays; this is what a *writer* is handed to fill in.
+ * public/.well-known/curare.to/nostr.json, and the static export serves it.
+ * It is the site's single source of truth about its own list: the pubkey that
+ * signed it is the curator, which fixes the schema coordinate suggestions must
+ * reply to, whose canonical events count, and (via its `relay` tags) where to
+ * read all of that from. Nothing about the curator is hardcoded — a site with
+ * no such file has no list, and says so.
+ *
+ * The submit form gates on it and is driven by it; the video store waits for
+ * it before subscribing to anything. One fetch serves both.
  *
  * Same-origin. `<Link>` and asset URLs get next.config's `basePath` applied
  * automatically; a hand-written fetch does not, so it is prefixed here from
@@ -67,33 +69,41 @@ async function loadSiteSchema(signal: AbortSignal): Promise<SiteSchemaState> {
   const schema = parseCuratedSchemaEvent(event as Event)
   if (!schema) return unavailable('holds an event that is not a usable schema')
 
-  // Not fatal — the form should follow what the site publishes — but it means
-  // the reader side (CURATED_SCHEMA_NAMESPACE) and the writer side disagree about who
-  // the curator is, which is a deploy mistake worth surfacing.
-  if (CURATED_SCHEMA_NAMESPACE && schema.namespace !== CURATED_SCHEMA_NAMESPACE) {
-    console.warn(
-      `${SITE_SCHEMA_PATH} was published by ${schema.namespace.slice(0, 8)}…, ` +
-        `but CURATED_SCHEMA_NAMESPACE is ${CURATED_SCHEMA_NAMESPACE.slice(0, 8)}…`,
+  return { status: 'ready', schema, reason: null }
+}
+
+let cached: Promise<SiteSchemaState> | null = null
+
+/**
+ * The site's published schema, fetched once per page load and shared by
+ * everything that needs it — the store and the submit form both do, and they
+ * must agree on who the curator is.
+ */
+export function siteSchema(): Promise<SiteSchemaState> {
+  if (!cached) {
+    cached = loadSiteSchema(new AbortController().signal).catch(() =>
+      unavailable('could not be loaded'),
     )
   }
-
-  return { status: 'ready', schema, reason: null }
+  return cached
 }
 
 function unavailable(reason: string): SiteSchemaState {
   return { status: 'unavailable', schema: null, reason }
 }
 
-/** The site's published schema, fetched once per mount. */
+/** The site's published schema, for components. */
 export function useSiteSchema(): SiteSchemaState {
   const [state, setState] = useState<SiteSchemaState>(LOADING)
 
   useEffect(() => {
-    const controller = new AbortController()
-    loadSiteSchema(controller.signal).then((next) => {
-      if (!controller.signal.aborted) setState(next)
+    let cancelled = false
+    siteSchema().then((next) => {
+      if (!cancelled) setState(next)
     })
-    return () => controller.abort()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return state

@@ -26,13 +26,24 @@ async function main() {
 
   // A schema published to the relay wins over the bundled one — that is the
   // whole point of putting it on Nostr. Fall back when there isn't one.
-  const { schema, published } = await loadSchema(pool, READ_RELAYS)
+  const { schema, published, curator, others } = await loadSchema(pool, READ_RELAYS)
   console.log(
     published
-      ? `Using published schema ${curatedSchemaAddress(schema)}`
-      : `No kind ${CURATED_SCHEMA_KIND} schema on the relay — using the bundled one ` +
+      ? `Using published schema ${curatedSchemaAddress(schema)}` +
+          (curator ? '\n  (the curator named by public/.well-known/curare.to/nostr.json)' : '')
+      : curator
+        ? `The well-known file names curator ${curator.slice(0, 8)}…, but the relay has no ` +
+          `schema by them.\n  Publish it: NOSTR_NSEC=nsec1... npm run seed:schema`
+        : `No kind ${CURATED_SCHEMA_KIND} schema on the relay — using the bundled one ` +
           `("${DEFAULT_CURATED_SCHEMA.identifier}"). Publish it with: npm run seed:schema`,
   )
+  if (others.length > 0) {
+    console.log(
+      `  ! ${others.length} other schema(s) share this identifier on the relay, by ` +
+        `${others.map((p) => p.slice(0, 8) + '…').join(', ')} — the app ignores them, ` +
+        `and so does this`,
+    )
+  }
   console.log(
     `  ${curatedSchemaDisplayName(schema)} — ${schema.description}\n` +
       `  kind ${schema.kind}, visibility: ${schema.visibility}`,
@@ -104,9 +115,11 @@ async function main() {
 
     if ([...reasons.keys()].some((r) => r.startsWith('schema:'))) {
       console.log(
-        '\nThose entries predate the schema they should be replying to.\n' +
-          'Re-run `npm run seed` — kind 31888 is addressable, so it replaces\n' +
-          'them by `d` rather than creating duplicates.',
+        '\nThose entries reply to a different schema than the one this site is\n' +
+          'committed to — an older version, or one published by another key.\n' +
+          'Re-run `npm run seed` with the key that signed the well-known file;\n' +
+          'kind 31888 is addressable, so it replaces them by `d` rather than\n' +
+          'creating duplicates.',
       )
     }
   }

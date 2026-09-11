@@ -286,9 +286,11 @@ async function main() {
     console.log(
       `\nCoordinate: ${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}\n\n` +
         'Next:\n' +
-        '  1. Set CURATED_SCHEMA_NAMESPACE in lib/nostr/curatedSchemaEvent.ts to:\n' +
-        `       '${pubkey}'\n` +
-        '  2. Re-run `npm run seed`.\n\n' +
+        '  1. Commit public/.well-known/curare.to/nostr.json — the app reads the\n' +
+        '     curator, the schema coordinate and the relays from it. Nothing is\n' +
+        '     hardcoded; a site without it has no list.\n' +
+        '  2. Re-run `npm run seed` if suggestions or canonical entries predate\n' +
+        '     this schema, or its relays changed.\n\n' +
         'Suggestions are replies to this schema, so they must carry its `a`\n' +
         'coordinate. Entries published before it existed will not verify until\n' +
         'they are re-seeded — kind 31888 is addressable, so re-seeding replaces\n' +

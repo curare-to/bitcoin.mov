@@ -399,6 +399,14 @@ are addressable, so republishing replaces them.
 Scoping canonical events by `authors` is redundant with rule 8 above and is
 done to spare the relay the work.
 
+`<curator>` in these filters is the pubkey that signed the schema the client
+is committed to — for a site, the one served at the [well-known
+path](#serving-the-schema-over-https). A client MUST NOT read suggestions or
+canonical events for a list without first establishing that pubkey, and MUST
+NOT take it from an unsigned source. Two schemas sharing an identifier on a
+relay are two lists; a client shows the one whose curator it is committed to
+and ignores the other.
+
 ## Serving the schema over HTTPS
 
 A site built around a list SHOULD also serve its signed schema event at
@@ -426,12 +434,16 @@ path — that is `/.well-known/nostr.json` at the domain root, and it answers
 "who am I" rather than "here is the schema". The path segment `curare.to`
 names this protocol.
 
-A client presenting a suggestion form SHOULD fetch this document, MUST verify
-the signature of the event inside it, MUST reject it if the event is not a
-usable schema, and SHOULD treat its absence as *this site is not accepting
-suggestions*. The site serving the file proves nothing about who wrote it;
-the signature does. When present, the form SHOULD be driven by the schema
-it contains.
+A client for the site SHOULD fetch this document before reading or writing
+anything, MUST verify the signature of the event inside it, and MUST reject it
+if the event is not a usable schema. The pubkey that signed it is the curator
+the client commits to: it fixes the coordinate suggestions reply to, whose
+canonical events count, and — via the `relay` tags — where to read them. The
+site serving the file proves nothing about who wrote it; the signature does.
+
+Its absence means *this site has no list*: a client SHOULD show neither
+entries nor a suggestion form, and SHOULD say why. When present, the form
+SHOULD be driven by the schema it contains.
 
 ## Client behaviour
 

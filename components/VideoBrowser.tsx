@@ -21,7 +21,7 @@ function matchesSearch(group: FilmGroup, q: string): boolean {
 }
 
 export function VideoBrowser() {
-  const { videos, loading } = useVideos()
+  const { videos, loading, schemaStatus } = useVideos()
   const [search, setSearch] = useState('')
   const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
   const [sort, setSort] = useState<SortMode>('recent')
@@ -60,6 +60,8 @@ export function VideoBrowser() {
 
       {loading && videos.length === 0 ? (
         <LoadingState />
+      ) : schemaStatus === 'unavailable' ? (
+        <NoListState />
       ) : groups.length === 0 ? (
         <EmptyState hasAny={curated.length > 0} />
       ) : (
@@ -84,6 +86,24 @@ function LoadingState() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * The site serves no schema at /.well-known/curare.to/nostr.json, so there is
+ * no curator and no list to read — different from a list that exists and is
+ * empty, and nothing the visitor can do about it.
+ */
+function NoListState() {
+  return (
+    <div className="text-center py-20 border border-dashed border-[var(--color-border)] rounded-[var(--radius-card)]">
+      <div className="text-4xl mb-3">🎬</div>
+      <h2 className="font-semibold text-lg mb-1">No list published</h2>
+      <p className="text-[var(--color-muted)] max-w-md mx-auto">
+        This site hasn’t published a curated schema, so there’s no list to
+        show yet.
+      </p>
     </div>
   )
 }

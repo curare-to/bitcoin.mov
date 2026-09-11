@@ -99,8 +99,7 @@ async function main() {
     console.error(
       'This schema has not been published, so there is no curator and nothing\n' +
         'to curate under. Publish it first:\n\n' +
-        '  NOSTR_NSEC=nsec1... npm run schema\n\n' +
-        'then set CURATED_SCHEMA_NAMESPACE in lib/nostr/curatedSchemaEvent.ts to the pubkey it prints.',
+        '  NOSTR_NSEC=nsec1... npm run seed:schema',
     )
     process.exit(1)
   }

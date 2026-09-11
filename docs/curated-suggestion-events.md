@@ -116,10 +116,12 @@ reply conventions. Neither is load-bearing: `a` is what's verified and what
 relays are queried on.
 
 > **The `a` root is required only once the schema has a coordinate to reply to.**
-> While `CURATED_SCHEMA_NAMESPACE` is empty the schema is unpublished, there is nothing
-> to point at, and suggestions carry no reply tags. Setting it makes the reply
-> mandatory — so suggestions published beforehand stop verifying until they are
-> re-seeded. `npm run verify` says so explicitly when that's what's happening.
+> A schema that hasn't been published has no author and nothing to point at, so
+> suggestions made against the bundled default carry no reply tags. Once the
+> site serves a signed schema at `/.well-known/curare.to/nostr.json`, the reply
+> is mandatory and must name *that* curator's coordinate — suggestions replying
+> to any other schema, older or someone else's, are rejected. `npm run verify`
+> says so explicitly when that's what's happening.
 
 ## Verification
 

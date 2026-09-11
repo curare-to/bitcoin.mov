@@ -202,10 +202,10 @@ npm run schema:dry -- --name="Bitcoin on screen" \
 NOSTR_NSEC=nsec1... npm run schema
 ```
 
-It prints the coordinate and the next steps. To make the app read curated
-events, set `CURATED_SCHEMA_NAMESPACE` in
-[`lib/nostr/curatedSchemaEvent.ts`](../lib/nostr/curatedSchemaEvent.ts) to the pubkey it
-prints.
+It prints the coordinate and the next steps. Nothing about the curator is
+written into source: the app learns who the curator is from the signed event
+in `/.well-known/curare.to/nostr.json`, so publishing the schema and committing
+that file is the whole of it.
 
 ### Served over HTTPS too
 
@@ -233,7 +233,12 @@ says *here is who I am*.
 The write happens before publishing, so an unreachable relay doesn't cost you
 the HTTPS copy.
 
-**The submit form gates on this file.** It fetches it on load; if it's missing,
+**The whole app keys off this file.** The store fetches it before subscribing
+to anything: the pubkey that signed it is the curator, which fixes the schema
+coordinate suggestions must reply to, whose canonical events count, and (via
+the `relay` tags) where to read them from. No file, no list.
+
+**The submit form gates on it too.** It fetches it on load; if it's missing,
 isn't JSON, holds no event, holds one whose signature doesn't verify, or holds
 one that isn't a usable schema, the page says *Not accepting submissions* and
 shows which of those it was. When it's there, the form is driven by *that*
@@ -241,7 +246,9 @@ schema — the one the site actually published — rather than the bundled defau
 So a site with no published schema offers no form, rather than a form that
 would build events against a schema nobody signed.
 
-> Setting `CURATED_SCHEMA_NAMESPACE` also makes the reply root **mandatory** on
-> suggestions, so entries published before the schema existed stop verifying.
-> Re-run `npm run seed` — everything is addressable, so entries are replaced by
-> `d` rather than duplicated. `npm run verify` names any that still need it.
+> Publishing a schema makes the reply root **mandatory** on suggestions, and
+> scopes the app to the key that signed it. Suggestions published beforehand —
+> or under a different key — stop verifying. Re-run `npm run seed` with the
+> same key; everything is addressable, so entries are replaced by `d` rather
+> than duplicated. `npm run verify` names any that still need it, and reports
+> any other schema sharing the identifier on the relay.

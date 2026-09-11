@@ -161,8 +161,10 @@ deploying it is mostly a matter of pointing it somewhere real. In order:
    data — the signed event and your pubkey — so committing it is safe.
    (Generating it in CI instead would mean putting your signing key in CI.
    Don't.)
-4. **`CURATED_SCHEMA_NAMESPACE`** in `lib/nostr/curatedSchemaEvent.ts` must be the key you
-   seeded with. It already is if you haven't changed keys.
+4. **Same key throughout.** The app scopes everything to the pubkey that
+   signed the well-known file, so the schema, suggestions and canonical entries
+   on the relay must all come from a `npm run seed` with that key. A schema
+   published under another key is ignored — `npm run verify` will point it out.
 5. **Enable Pages.** Settings → Pages → Source: *GitHub Actions*. The workflow
    in `.github/workflows/pages.yml` deploys on push to `main`.
 6. **Sub-path or domain?** Under `user.github.io/repo` set
@@ -191,9 +193,10 @@ NOSTR_NSEC=nsec1... npm run curate -- --id=<event id>
   [`lib/nostr/curatedSchemaEvent.ts`](lib/nostr/curatedSchemaEvent.ts) directly (Node 22
   strips the types), so they build and verify events with the *same* code the
   browser runs. There is no second copy to keep in sync.
-- Curation only lights up in the app once `CURATED_SCHEMA_NAMESPACE` in
-  `lib/nostr/curatedSchemaEvent.ts` is set to the curator's pubkey — step 1 prints it.
-  Until then the app reads suggestions but not curated entries.
+- The app has no hardcoded curator. It reads the signed schema from
+  `public/.well-known/curare.to/nostr.json`, and that decides whose list it
+  shows, which coordinate suggestions must reply to, and which relays to read.
+  Without the file the home page says *No list published*.
 - Each entry ships with a verified poster `"image"` (https): portrait posters
   from Wikipedia/TMDB where available, otherwise the film's YouTube thumbnail.
   If a URL breaks, the card falls back to the ₿ placeholder automatically.

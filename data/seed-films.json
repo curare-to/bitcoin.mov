@@ -377,6 +377,19 @@
     "description": "Released theatrically as “Anonymous”. A young Ukrainian immigrant falls in with a dark-web crime ring in Toronto and Hong Kong, carding and laundering their way up through the banking system on cloned cards and Bitcoin."
   },
   {
+    "title": "South Park: Post COVID",
+    "year": "2021",
+    "type": "movie",
+    "director": "Trey Parker",
+    "durationSeconds": "",
+    "watchUrl": "",
+    "imdbUrl": "https://www.imdb.com/title/tt15005868/",
+    "image": "https://image.tmdb.org/t/p/w500/abDxPtElhJnLnnJxgMqJ1N2H8yl.jpg",
+    "externalId": "imdb:tt15005868",
+    "lang": "en",
+    "description": "The Paramount+ special jumps forty years ahead to a South Park where everything is priced in Bitcoin and paid for with plastic QR-code cards — \"we've all decided centralized banking is rigged\" — one of the sharpest crypto send-ups on television."
+  },
+  {
     "title": "Nerve",
     "year": "2016",
     "type": "movie",
@@ -505,18 +518,5 @@
     "externalId": "",
     "lang": "en",
     "description": "VICE's 2015 field report from one of the massive, hidden mining operations that then produced a large share of the world's Bitcoin."
-  },
-  {
-    "title": "South Park: Post COVID",
-    "year": "2021",
-    "type": "series",
-    "director": "Trey Parker",
-    "durationSeconds": "",
-    "watchUrl": "",
-    "imdbUrl": "https://www.imdb.com/title/tt15005868/",
-    "image": "https://image.tmdb.org/t/p/w500/abDxPtElhJnLnnJxgMqJ1N2H8yl.jpg",
-    "externalId": "imdb:tt15005868",
-    "lang": "en",
-    "description": "The Paramount+ special jumps forty years ahead to a South Park where everything is priced in Bitcoin and paid for with plastic QR-code cards — \"we've all decided centralized banking is rigged\" — one of the sharpest crypto send-ups on television."
   }
 ]

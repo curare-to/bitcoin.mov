@@ -42,6 +42,10 @@ it. The pubkey that published the schema goes through them and republishes the
 ones it accepts as curated entries — same fields, signed by the curator,
 pointing back at the suggestion they came from.
 
+The **home page lists curated entries only**; everything suggested is at
+`/suggestions`. Publishing a suggestion puts it in the queue, not on the front
+page — but it stays readable on the relays either way.
+
 Suggesting stays open even on a list nobody else can curate: `visibility`
 governs who may *suggest*, and has no bearing on curation. Curation is the one
 power the schema author doesn't share.

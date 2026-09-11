@@ -129,9 +129,27 @@ applies: required fields, types, `require-any`, the reply root.
 
 ## In the app
 
-A curated entry **outranks the newest suggestion** as the representative of its
-film group. However many people suggested a title and however recently, the
-curator's version is the one on the card:
+**The home page is the curated list.** A film appears there once the curator has
+signed off on it, and not before — that's what makes it a curated screening
+rather than a firehose. Everything anyone has suggested stays readable at
+`/suggestions`, and the detail page for any of it still works.
+
+```ts
+// lib/util/dedup.ts
+export function curatedFilms(videos: Video[]): FilmGroup[] {
+  return groupFilms(videos).filter((group) => group.primary.curated)
+}
+```
+
+Grouping runs over *every* entry and only then drops the uncurated groups.
+Filtering the videos first would work too, but each group would then know only
+about its curated entry — losing the "+3 more suggestions" count on the card and
+the sibling list on the detail page. The curated entry represents the film; what
+was suggested behind it is still worth showing.
+
+Within a group, the curated entry is the representative. However many people
+suggested a title and however recently, the curator's version is the one on the
+card:
 
 ```ts
 const primary = entries.find((v) => v.curated) ?? entries[0]
@@ -147,8 +165,9 @@ The store subscribes to curated events separately, scoped to the curator:
 { kinds: [31890], authors: [curator], "#a": [schemaAddress] }
 ```
 
-That filter only runs once `SCHEMA_NAMESPACE` is set, so curated entries are
-invisible to the app until the schema is published.
+That filter only runs once `SCHEMA_NAMESPACE` is set. Until it is, the app reads
+no curated events at all — which now leaves the home page empty, since that is
+all it lists. Setting it is part of publishing a schema, not an optional extra.
 
 ## Curating
 

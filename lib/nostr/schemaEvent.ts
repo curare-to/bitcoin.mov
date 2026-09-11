@@ -195,17 +195,20 @@ export interface SuggestionSchema {
 /**
  * The pubkey that publishes the canonical bitcoin.mov schema.
  *
- * Set this to the curator's pubkey (hex) once `npm run schema` has published
- * it. Until then there is no coordinate for a suggestion to reply to, so
- * suggestions carry no reply tags and the app works off the bundled
- * DEFAULT_SCHEMA.
+ * Set to the pubkey that published the schema on the dev relay. Until this is
+ * set there is no coordinate for a suggestion to reply to, no curator, and the
+ * app can neither require the reply nor read curated events at all — which
+ * would leave the home page permanently empty, since it lists curated entries.
+ *
+ * Change it when you publish the schema under a different key.
  *
  * Setting it turns the reply into a requirement, which means suggestions
  * published *before* the schema existed stop verifying. Re-run `npm run seed`
  * after publishing: kind 31888 is addressable, so re-seeding replaces each
  * entry by its `d` rather than duplicating it.
  */
-export const SCHEMA_NAMESPACE = ''
+export const SCHEMA_NAMESPACE =
+  '94318e82c0a05acebded80aedb368932625e769430161dacd0dc3ade7ba52793'
 
 /**
  * Discovery hashtag kept on suggestions for backwards compatibility. It is

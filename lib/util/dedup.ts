@@ -20,6 +20,19 @@ export interface FilmGroup {
   entries: Video[]
 }
 
+/**
+ * The films the curator has signed off on — what the home page lists.
+ *
+ * Grouping runs over *every* entry first, then groups without a curated one are
+ * dropped. Filtering the videos instead would work, but each group would then
+ * know only about its curated entry, losing the "+N more suggestions" count and
+ * the sibling list on the detail page. The curated entry represents the film;
+ * the suggestions behind it are still worth knowing about.
+ */
+export function curatedFilms(videos: Video[]): FilmGroup[] {
+  return groupFilms(videos).filter((group) => group.primary.curated)
+}
+
 function normalizeTitle(title: string): string {
   return title
     .toLowerCase()

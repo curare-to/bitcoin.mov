@@ -66,8 +66,9 @@ field values, correct anything that needs correcting, and republish it as kind
 still rooted at the schema, and adding `a`/`e`/`p` tags pointing at the
 suggestion and crediting `eebb74ab…`.
 
-In the app, that curated version now represents the film wherever more than one
-person suggested it, and is marked *Curated*.
+In the app, that film now appears on the home page — which lists curated entries
+only — marked *Curated*, with the suggestions behind it still reachable from
+`/suggestions` and from the film's own page.
 
 ## Reading the list
 

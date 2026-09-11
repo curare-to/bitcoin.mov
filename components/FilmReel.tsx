@@ -11,7 +11,7 @@ import {
 import Link from 'next/link'
 import { Poster } from './ui/Poster'
 import { useVideos } from '@/lib/nostr/useVideos'
-import { groupFilms, type FilmGroup } from '@/lib/util/dedup'
+import { curatedFilms, type FilmGroup } from '@/lib/util/dedup'
 import { typeLabel, timeAgo, isLandscapeThumb } from '@/lib/util/format'
 import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
 
@@ -29,7 +29,7 @@ export function FilmReel() {
   const [dir, setDir] = useState<'asc' | 'desc'>('asc')
   const [type, setType] = useState<TypeFilter>('all')
 
-  const allGroups = useMemo(() => groupFilms(videos), [videos])
+  const allGroups = useMemo(() => curatedFilms(videos), [videos])
 
   // Only offer chips for types that actually have films.
   const availableTypes = useMemo(() => {
@@ -40,7 +40,7 @@ export function FilmReel() {
 
   // The full timeline for the selected type, ordered by release year in the
   // chosen direction — every match shows, so neither the earliest nor the
-  // latest is hidden. Missing years sort to the end; suggestion time breaks ties.
+  // latest is hidden. Missing years sort to the end; publish time breaks ties.
   const reel = useMemo(() => {
     const filtered =
       type === 'all'
@@ -103,7 +103,7 @@ export function FilmReel() {
 
   return (
     <section
-      aria-label="Latest suggestions"
+      aria-label="Curated titles by year"
       className="border-b border-[var(--color-border)]"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-2">
@@ -156,7 +156,9 @@ export function FilmReel() {
         >
           {reel.length === 0 ? (
             <p className="px-4 sm:px-6 py-8 font-condensed uppercase tracking-widest text-[11px] text-[var(--color-muted)]">
-              No {typeLabel(type as VideoType)} entries yet.
+              {type === 'all'
+                ? 'Nothing curated yet.'
+                : `No ${typeLabel(type as VideoType)} entries yet.`}
             </p>
           ) : (
             <div className="flex gap-3 w-max px-4 sm:px-6 py-3">

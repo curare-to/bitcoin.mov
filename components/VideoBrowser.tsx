@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useVideos } from '@/lib/nostr/useVideos'
-import { groupFilms, type FilmGroup } from '@/lib/util/dedup'
+import { curatedFilms, type FilmGroup } from '@/lib/util/dedup'
 import { VideoGrid } from './VideoGrid'
 import { FilterBar, type SortMode, type TypeFilter } from './FilterBar'
 
@@ -26,7 +27,7 @@ export function VideoBrowser() {
   const [sort, setSort] = useState<SortMode>('recent')
 
   const groups = useMemo(() => {
-    let result = groupFilms(videos)
+    let result = curatedFilms(videos)
 
     if (type !== 'all') {
       result = result.filter((g) => g.entries.some((v) => v.type === type))
@@ -58,7 +59,7 @@ export function VideoBrowser() {
       {loading && videos.length === 0 ? (
         <LoadingState />
       ) : groups.length === 0 ? (
-        <EmptyState hasAny={videos.length > 0} />
+        <EmptyState hasAny={groups.length > 0 || search.trim() !== '' || type !== 'all'} />
       ) : (
         <VideoGrid groups={groups} />
       )}
@@ -85,17 +86,34 @@ function LoadingState() {
   )
 }
 
-function EmptyState({ hasAny }: { hasAny: boolean }) {
+/**
+ * `filtered` distinguishes "your search matched nothing" from "nothing has been
+ * curated yet" — very different situations, and the second one has somewhere
+ * useful to send you.
+ */
+function EmptyState({ hasAny: filtered }: { hasAny: boolean }) {
   return (
     <div className="text-center py-20 border border-dashed border-[var(--color-border)] rounded-[var(--radius-card)]">
       <div className="text-4xl mb-3">🎬</div>
       <h2 className="font-semibold text-lg mb-1">
-        {hasAny ? 'No titles match your filters' : 'No titles yet'}
+        {filtered ? 'No titles match your filters' : 'Nothing curated yet'}
       </h2>
       <p className="text-[var(--color-muted)] max-w-md mx-auto">
-        {hasAny
-          ? 'Try clearing the search or picking a different category.'
-          : 'Be the first to add a Bitcoin title — suggestions are published to Nostr as kind 31888 events.'}
+        {filtered ? (
+          'Try clearing the search or picking a different category.'
+        ) : (
+          <>
+            This page lists the titles the curator has signed off on. Nothing has
+            been yet —{' '}
+            <Link
+              href="/suggestions"
+              className="text-[var(--color-btc)] hover:underline"
+            >
+              see what’s been suggested
+            </Link>
+            .
+          </>
+        )}
       </p>
     </div>
   )

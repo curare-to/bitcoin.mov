@@ -174,11 +174,14 @@ path has something to show.
 
 ## Seeing them
 
-`/suggestions` in the app is the raw feed: one row per suggestion event, newest
-first, with whoever signed it and a marker when the curator has taken the title
-up. That's deliberately not what the home page shows — there, duplicates are
-collapsed into one film card. Use the feed to check whether a title has already
-been suggested before adding it; there's a link to it from the submit form.
+The home page lists only what the curator has signed off on. Suggestions live at
+`/suggestions`: the raw feed, one row per event, newest first, with whoever
+signed it and a marker when the curator has taken the title up.
+
+So publishing a suggestion doesn't put it on the front page — it puts it in the
+queue. It stays readable on the relays regardless, and its detail page works
+like any other entry. Use the feed to check whether a title has already been
+suggested before adding it; the submit form links to it.
 
 ## Publishing one
 

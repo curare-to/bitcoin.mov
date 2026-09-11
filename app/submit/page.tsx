@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { SubmitForm } from '@/components/SubmitForm'
+import { SubmitGate } from '@/components/SubmitForm'
 
 export const metadata: Metadata = {
   title: 'Submit a title',
@@ -16,7 +16,7 @@ export default function SubmitPage() {
           <p className="text-[var(--color-muted)] py-16 text-center">Loading…</p>
         }
       >
-        <SubmitForm />
+        <SubmitGate />
       </Suspense>
     </div>
   )

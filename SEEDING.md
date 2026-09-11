@@ -69,7 +69,9 @@ involved. **Commit that file**: it's what the deployed site serves.
 ```
 
 The file is written *before* publishing, so a relay being down doesn't cost you
-the HTTPS copy. It is not the NIP-05 path — that's `/.well-known/nostr.json` at
+the HTTPS copy. The submit form checks for it on load and says *Not accepting
+submissions* until it's there — so until you've run this step, the site can be
+browsed but not added to. It is not the NIP-05 path — that's `/.well-known/nostr.json` at
 the domain root, and it answers a different question ("who am I", rather than
 "here's the schema").
 

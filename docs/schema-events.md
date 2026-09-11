@@ -219,6 +219,14 @@ says *here is who I am*.
 The write happens before publishing, so an unreachable relay doesn't cost you
 the HTTPS copy.
 
+**The submit form gates on this file.** It fetches it on load; if it's missing,
+isn't JSON, holds no event, holds one whose signature doesn't verify, or holds
+one that isn't a usable schema, the page says *Not accepting submissions* and
+shows which of those it was. When it's there, the form is driven by *that*
+schema — the one the site actually published — rather than the bundled default.
+So a site with no published schema offers no form, rather than a form that
+would build events against a schema nobody signed.
+
 > Setting `SCHEMA_NAMESPACE` also makes the reply root **mandatory** on
 > suggestions, so entries published before the schema existed stop verifying.
 > Re-run `npm run seed` — everything is addressable, so entries are replaced by

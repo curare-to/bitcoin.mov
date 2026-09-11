@@ -14,7 +14,6 @@ import {
   type VideoType,
 } from '@/lib/nostr/schema'
 import {
-  DEFAULT_SCHEMA,
   canSuggest,
   fieldProps,
   findField,
@@ -22,6 +21,7 @@ import {
   type SuggestionSchema,
 } from '@/lib/nostr/schemaEvent'
 import { Poster } from '@/components/ui/Poster'
+import { useSiteSchema, SITE_SCHEMA_PATH } from '@/lib/nostr/useSiteSchema'
 import { signAndPublish, Nip07Error } from '@/lib/nostr/nip07'
 import { videoStore, useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
@@ -58,15 +58,16 @@ interface EditTarget {
   pubkey: string
 }
 
-export function SubmitForm() {
+/**
+ * The form itself. `schema` is the site's *published* schema — fetched from
+ * /.well-known/curare.to/nostr.json by SubmitGate — and it decides which inputs
+ * exist, what they're called, what they suggest, and which are required.
+ */
+export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
   const { availability, pubkey, connect } = useNip07()
   const { videos } = useVideos()
   const editId = useSearchParams().get('edit')
 
-  // The schema event decides which inputs exist, what they're called, what
-  // they suggest, and which are required. Swap this for one fetched off a
-  // relay (parseSchemaEvent) and the form below follows without edits.
-  const schema: SuggestionSchema = DEFAULT_SCHEMA
   const typeOptions = (findField(schema, 'type')?.config.options ??
     VIDEO_TYPES) as readonly VideoType[]
   const blocked = !canSuggest(schema, pubkey)
@@ -393,6 +394,66 @@ export function SubmitForm() {
         </button>
       </form>
     </div>
+  )
+}
+
+/* ------------------------------ gate ------------------------------- */
+
+/**
+ * Whether this site is accepting suggestions at all.
+ *
+ * It is if — and only if — it serves a signed schema at
+ * /.well-known/curare.to/nostr.json. No file means no published schema, so
+ * there is nothing to submit to, and the page says so rather than offering a
+ * form that would build events against a schema the site never published.
+ */
+export function SubmitGate() {
+  const site = useSiteSchema()
+
+  if (site.status === 'loading') {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <PageTitle />
+        <p className="text-[var(--color-muted)] py-16 text-center">
+          Checking whether this site is accepting suggestions…
+        </p>
+      </div>
+    )
+  }
+
+  if (site.status === 'unavailable') {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <PageTitle />
+        <div className="rounded-xl border border-dashed border-[var(--color-border)] text-center py-16 px-6">
+          <div className="text-4xl mb-3">🎬</div>
+          <h2 className="font-semibold text-lg mb-1">Not accepting submissions</h2>
+          <p className="text-[var(--color-muted)] max-w-md mx-auto">
+            This site hasn’t published a suggestion schema, so there’s nothing to
+            submit to yet.
+          </p>
+          <p className="text-xs text-[var(--color-muted)] mt-4 font-mono">
+            {SITE_SCHEMA_PATH} {site.reason}
+          </p>
+          <Link
+            href="/"
+            className="inline-block mt-6 text-sm text-[var(--color-btc)] hover:underline"
+          >
+            ← Back to the list
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  return <SubmitForm schema={site.schema} />
+}
+
+function PageTitle() {
+  return (
+    <h1 className="font-display font-black text-4xl tracking-tight mb-2">
+      Submit a title
+    </h1>
   )
 }
 

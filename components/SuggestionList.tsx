@@ -24,9 +24,9 @@ export function SuggestionList() {
     // A suggestion counts as curated when a curated entry shares its `d` —
     // that's the coordinate both land on.
     const curatedIds = new Set(
-      videos.filter((v) => v.curated).map((v) => v.identifier),
+      videos.filter((v) => v.canonical).map((v) => v.identifier),
     )
-    const suggestions = videos.filter((v) => !v.curated)
+    const suggestions = videos.filter((v) => !v.canonical)
 
     const needle = search.trim().toLowerCase()
     const rows = suggestions
@@ -45,7 +45,7 @@ export function SuggestionList() {
     }
   }, [videos, search])
 
-  const total = videos.filter((v) => !v.curated).length
+  const total = videos.filter((v) => !v.canonical).length
 
   return (
     <div className="flex flex-col gap-5">

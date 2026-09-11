@@ -22,13 +22,13 @@
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import {
-  CURATION_KIND,
-  buildCurationTemplate,
+  CURATED_CANONICAL_KIND,
+  buildCuratedCanonicalTemplate,
   eventToValues,
-  schemaAddress,
-  suggestionRef,
-  verifyCuration,
-} from '../lib/nostr/schemaEvent.ts'
+  curatedSchemaAddress,
+  curatedSuggestionRef,
+  verifyCuratedCanonical,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 import { planCuration } from './curate.mjs'
 import {
   RELAYS,
@@ -50,7 +50,7 @@ async function main() {
 
   const pool = new SimplePool()
   const { schema, published } = await loadSchema(pool)
-  const address = schemaAddress(schema)
+  const address = curatedSchemaAddress(schema)
 
   if (!published || !address) {
     // In a dry run nothing has been published yet by definition, so having
@@ -73,7 +73,7 @@ async function main() {
   const [suggestions, curations] = await Promise.all([
     pool.querySync(RELAYS, { kinds: [schema.kind], '#a': [address], limit: 1000 }),
     pool.querySync(RELAYS, {
-      kinds: [CURATION_KIND],
+      kinds: [CURATED_CANONICAL_KIND],
       authors: [schema.namespace],
       limit: 1000,
     }),
@@ -113,16 +113,16 @@ async function main() {
 
   const templates = picked.map((row) => ({
     row,
-    template: buildCurationTemplate(
+    template: buildCuratedCanonicalTemplate(
       eventToValues(row.event, schema),
       schema,
-      suggestionRef(row.event, schema),
+      curatedSuggestionRef(row.event, schema),
       { identifier: row.d },
     ),
   }))
 
   if (dryRun) {
-    console.log(`\nDRY RUN — ${templates.length} kind ${CURATION_KIND} events:\n`)
+    console.log(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
     for (const { template } of templates) console.log(JSON.stringify(template))
     console.log('\nNo key used, nothing published.')
     done(pool)
@@ -145,7 +145,7 @@ async function main() {
 
   let ok = 0
   for (const { row, template } of templates) {
-    const check = verifyCuration({ ...template, pubkey }, schema)
+    const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
     if (!check.ok) {
       console.log(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
       continue

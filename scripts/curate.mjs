@@ -24,18 +24,18 @@ import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
 import {
-  CURATION_KIND,
-  DEFAULT_SCHEMA,
-  SCHEMA_KIND,
-  buildCurationTemplate,
+  CURATED_CANONICAL_KIND,
+  DEFAULT_CURATED_SCHEMA,
+  CURATED_SCHEMA_KIND,
+  buildCuratedCanonicalTemplate,
   eventToValues,
-  parseSchemaEvent,
-  schemaAddress,
-  schemaDisplayName,
-  suggestionRef,
-  verifyCuration,
-  verifySuggestion,
-} from '../lib/nostr/schemaEvent.ts'
+  parseCuratedSchemaEvent,
+  curatedSchemaAddress,
+  curatedSchemaDisplayName,
+  curatedSuggestionRef,
+  verifyCuratedCanonical,
+  verifyCuratedSuggestion,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 import { RELAYS, publish } from './lib.mjs'
 
 const args = process.argv.slice(2)
@@ -55,12 +55,12 @@ function short(pubkey) {
 
 /** The published schema if the relay has one, else the bundled default. */
 async function loadSchema(pool) {
-  const events = await pool.querySync(RELAYS, { kinds: [SCHEMA_KIND], limit: 50 })
+  const events = await pool.querySync(RELAYS, { kinds: [CURATED_SCHEMA_KIND], limit: 50 })
   const published = events
-    .map(parseSchemaEvent)
-    .filter((s) => s !== null && s.identifier === DEFAULT_SCHEMA.identifier)
+    .map(parseCuratedSchemaEvent)
+    .filter((s) => s !== null && s.identifier === DEFAULT_CURATED_SCHEMA.identifier)
     .sort((a, b) => (b.source?.createdAt ?? 0) - (a.source?.createdAt ?? 0))[0]
-  return published ?? DEFAULT_SCHEMA
+  return published ?? DEFAULT_CURATED_SCHEMA
 }
 
 /**
@@ -85,7 +85,7 @@ export function planCuration(suggestions, curations, schema) {
     event,
     d: tag(event, 'd'),
     title: tag(event, 'title') || '(untitled)',
-    valid: verifySuggestion(event, schema),
+    valid: verifyCuratedSuggestion(event, schema),
     done: curated.has(tag(event, 'd')),
   }))
 }
@@ -93,25 +93,25 @@ export function planCuration(suggestions, curations, schema) {
 async function main() {
   const pool = new SimplePool()
   const schema = await loadSchema(pool)
-  const address = schemaAddress(schema)
+  const address = curatedSchemaAddress(schema)
 
   if (!address) {
     console.error(
       'This schema has not been published, so there is no curator and nothing\n' +
         'to curate under. Publish it first:\n\n' +
         '  NOSTR_NSEC=nsec1... npm run schema\n\n' +
-        'then set SCHEMA_NAMESPACE in lib/nostr/schemaEvent.ts to the pubkey it prints.',
+        'then set CURATED_SCHEMA_NAMESPACE in lib/nostr/curatedSchemaEvent.ts to the pubkey it prints.',
     )
     process.exit(1)
   }
 
-  console.log(`Curating for ${schemaDisplayName(schema)}  (${address})`)
+  console.log(`Curating for ${curatedSchemaDisplayName(schema)}  (${address})`)
   console.log(`  curator: ${short(schema.namespace)}\n`)
 
   const [suggestions, curations] = await Promise.all([
     pool.querySync(RELAYS, { kinds: [schema.kind], '#a': [address], limit: 1000 }),
     pool.querySync(RELAYS, {
-      kinds: [CURATION_KIND],
+      kinds: [CURATED_CANONICAL_KIND],
       authors: [schema.namespace],
       limit: 1000,
     }),
@@ -172,16 +172,16 @@ async function main() {
   // Build first, so a dry run shows exactly what signing would publish.
   const templates = picked.map((row) => ({
     row,
-    template: buildCurationTemplate(
+    template: buildCuratedCanonicalTemplate(
       eventToValues(row.event, schema),
       schema,
-      suggestionRef(row.event, schema),
+      curatedSuggestionRef(row.event, schema),
       { identifier: row.d },
     ),
   }))
 
   if (dryRun) {
-    console.log(`\nDRY RUN — ${templates.length} kind ${CURATION_KIND} events:\n`)
+    console.log(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
     for (const { template } of templates) console.log(JSON.stringify(template))
     console.log('\nNo key used, nothing published.')
     pool.close(RELAYS)
@@ -222,7 +222,7 @@ async function main() {
 
   let ok = 0
   for (const { row, template } of templates) {
-    const check = verifyCuration({ ...template, pubkey }, schema)
+    const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
     if (!check.ok) {
       console.log(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
       continue

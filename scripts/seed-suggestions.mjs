@@ -25,10 +25,10 @@ import { dirname, join } from 'node:path'
 import { finalizeEvent } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import {
-  buildSuggestionTemplate,
-  schemaAddress,
-  verifySuggestion,
-} from '../lib/nostr/schemaEvent.ts'
+  buildCuratedSuggestionTemplate,
+  curatedSchemaAddress,
+  verifyCuratedSuggestion,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 import {
   RELAYS,
   done,
@@ -99,7 +99,7 @@ async function main() {
         `carry no reply\ntags until there is a schema to reply to.\n`,
     )
   } else {
-    console.log(`Replying to ${schemaAddress(schema)}`)
+    console.log(`Replying to ${curatedSchemaAddress(schema)}`)
     console.log(`  curator: ${short(schema.namespace)}\n`)
   }
 
@@ -110,10 +110,10 @@ async function main() {
   const built = []
   const failures = []
   for (const row of plan) {
-    const template = buildSuggestionTemplate(row.film, schema, {
+    const template = buildCuratedSuggestionTemplate(row.film, schema, {
       createdAt: row.createdAt,
     })
-    const result = verifySuggestion(template, schema, { pubkey: row.author.pubkey })
+    const result = verifyCuratedSuggestion(template, schema, { pubkey: row.author.pubkey })
     if (result.ok) built.push({ ...row, template })
     else failures.push({ title: row.film.title ?? '(untitled)', result })
   }

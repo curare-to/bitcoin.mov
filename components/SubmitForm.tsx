@@ -5,31 +5,31 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { Event } from 'nostr-tools/pure'
 import {
-  buildSuggestion,
+  buildCuratedSuggestion,
   validateInput,
   videoToInput,
   parseEntry,
   VIDEO_TYPES,
-  type SuggestionInput,
+  type CuratedSuggestionInput,
   type VideoType,
 } from '@/lib/nostr/schema'
 import {
   canSuggest,
   fieldProps,
   findField,
-  schemaDisplayName,
-  type SuggestionSchema,
-} from '@/lib/nostr/schemaEvent'
+  curatedSchemaDisplayName,
+  type CuratedSchema,
+} from '@/lib/nostr/curatedSchemaEvent'
 import { Poster } from '@/components/ui/Poster'
 import { useSiteSchema, SITE_SCHEMA_PATH } from '@/lib/nostr/useSiteSchema'
 import { signAndPublish, Nip07Error } from '@/lib/nostr/nip07'
 import { videoStore, useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
 import { pool } from '@/lib/nostr/pool'
-import { READ_RELAYS, SUGGESTION_KIND } from '@/lib/nostr/relays'
+import { READ_RELAYS, CURATED_SUGGESTION_KIND } from '@/lib/nostr/relays'
 import { typeLabel, shortPubkey } from '@/lib/util/format'
 
-const EMPTY: SuggestionInput = {
+const EMPTY: CuratedSuggestionInput = {
   title: '',
   year: '',
   type: 'documentary',
@@ -43,7 +43,7 @@ const EMPTY: SuggestionInput = {
   description: '',
 }
 
-type Errors = Partial<Record<keyof SuggestionInput | 'visibility', string>>
+type Errors = Partial<Record<keyof CuratedSuggestionInput | 'visibility', string>>
 
 interface Success {
   id: string
@@ -63,7 +63,7 @@ interface EditTarget {
  * /.well-known/curare.to/nostr.json by SubmitGate — and it decides which inputs
  * exist, what they're called, what they suggest, and which are required.
  */
-export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
+export function SubmitForm({ schema }: { schema: CuratedSchema }) {
   const { availability, pubkey, connect } = useNip07()
   const { videos } = useVideos()
   const editId = useSearchParams().get('edit')
@@ -72,7 +72,7 @@ export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
     VIDEO_TYPES) as readonly VideoType[]
   const blocked = !canSuggest(schema, pubkey)
 
-  const [input, setInput] = useState<SuggestionInput>(EMPTY)
+  const [input, setInput] = useState<CuratedSuggestionInput>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -92,7 +92,7 @@ export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
     }
     let cancelled = false
     pool
-      .get([...READ_RELAYS], { ids: [editId], kinds: [SUGGESTION_KIND] })
+      .get([...READ_RELAYS], { ids: [editId], kinds: [CURATED_SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled || !event) return
         const v = parseEntry(event)
@@ -107,7 +107,7 @@ export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
     }
   }, [editId, prefilled, videos])
 
-  function set<K extends keyof SuggestionInput>(key: K, value: SuggestionInput[K]) {
+  function set<K extends keyof CuratedSuggestionInput>(key: K, value: CuratedSuggestionInput[K]) {
     setInput((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -130,7 +130,7 @@ export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
           'You can only edit entries published by your own key. Signing this will create a new entry instead.',
         )
       }
-      const template = buildSuggestion(input, editTarget?.d, schema)
+      const template = buildCuratedSuggestion(input, editTarget?.d, schema)
       const { signed, accepted, total } = await signAndPublish(template)
       videoStore.pushEvent(signed) // show it immediately
       setSuccess({ id: signed.id, accepted, total })
@@ -198,7 +198,7 @@ export function SubmitForm({ schema }: { schema: SuggestionSchema }) {
         </Link>
       </div>
 
-      <SchemaIdentity schema={schema} />
+      <CuratedSchemaIdentity schema={schema} />
 
       <SignerBanner
         availability={availability}
@@ -466,7 +466,7 @@ function PageTitle() {
  * the outside world. Nothing here has been verified, so it's presented as a
  * label, not a badge.
  */
-function SchemaIdentity({ schema }: { schema: SuggestionSchema }) {
+function CuratedSchemaIdentity({ schema }: { schema: CuratedSchema }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 mb-3">
       {schema.profileImageUrl && (
@@ -477,7 +477,7 @@ function SchemaIdentity({ schema }: { schema: SuggestionSchema }) {
         />
       )}
       <div className="min-w-0">
-        <p className="text-sm font-medium">{schemaDisplayName(schema)}</p>
+        <p className="text-sm font-medium">{curatedSchemaDisplayName(schema)}</p>
         <p className="text-xs text-[var(--color-muted)] mt-0.5">
           {schema.description}
         </p>
@@ -502,7 +502,7 @@ function Field({
   error,
   children,
 }: {
-  schema: SuggestionSchema
+  schema: CuratedSchema
   name: string
   label?: string
   hint?: string

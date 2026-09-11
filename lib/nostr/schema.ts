@@ -1,26 +1,26 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure'
 import {
-  CURATION_KIND,
-  DEFAULT_SCHEMA,
-  buildSuggestionTemplate,
-  curationSource,
+  CURATED_CANONICAL_KIND,
+  DEFAULT_CURATED_SCHEMA,
+  buildCuratedSuggestionTemplate,
+  curatedCanonicalSource,
   deriveIdentifier as deriveIdentifierFromValues,
   isSafeUrl,
   validateValues,
-  verifyCuration,
-  verifySuggestion,
+  verifyCuratedCanonical,
+  verifyCuratedSuggestion,
   VIDEO_TYPES,
-  type SuggestionRef,
-  type SuggestionSchema,
+  type CuratedSuggestionRef,
+  type CuratedSchema,
   type VideoType,
-} from './schemaEvent'
+} from './curatedSchemaEvent'
 
 /* ------------------------------------------------------------------ *
  * kind 31888 — the bitcoin.mov suggestion event (addressable/replaceable).
  *
  * This module turns those events into display-ready `Video` objects and back
  * again. The *shape* of the event — which tags exist, which are required, what
- * each may contain — lives in schemaEvent.ts as a publishable kind 31889
+ * each may contain — lives in curatedSchemaEvent.ts as a publishable kind 31889
  * schema event; everything here reads and writes through it, so the read and
  * write sides can never drift apart.
  *
@@ -30,7 +30,7 @@ import {
  * ------------------------------------------------------------------ */
 
 export { VIDEO_TYPES, isSafeUrl }
-export type { VideoType, SuggestionSchema, SuggestionRef }
+export type { VideoType, CuratedSchema, CuratedSuggestionRef }
 
 export interface WatchLink {
   url: string
@@ -65,10 +65,10 @@ export interface Video {
   hashtags: string[]
   /** Freeform review/description (plain text — never rendered as HTML). */
   description: string
-  /** True when the schema's author signed this off as a curated entry. */
-  curated: boolean
-  /** For a curated entry, the suggestion it came from — null if unprompted. */
-  source: SuggestionRef | null
+  /** True when this is a canonical event — the schema's author signed it off. */
+  canonical: boolean
+  /** For a canonical event, the suggestion it came from — null if unprompted. */
+  source: CuratedSuggestionRef | null
 }
 
 /* ----------------------------- helpers ----------------------------- */
@@ -87,7 +87,7 @@ function allTags(tags: string[][], name: string): string[][] {
  * Deterministic `d` identifier for a suggestion: the external id when given
  * (so "the same film" stays one editable entry), else a title+year slug.
  */
-export function deriveIdentifier(input: SuggestionInput): string {
+export function deriveIdentifier(input: CuratedSuggestionInput): string {
   return deriveIdentifierFromValues({ ...input })
 }
 
@@ -141,16 +141,16 @@ function toInt(value: string | null): number | null {
  */
 export function parseEntry(
   event: Event,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
 ): Video | null {
-  const curated = event.kind === CURATION_KIND
-  const result = curated
-    ? verifyCuration(event, schema)
-    : verifySuggestion(event, schema)
+  const canonical = event.kind === CURATED_CANONICAL_KIND
+  const result = canonical
+    ? verifyCuratedCanonical(event, schema)
+    : verifyCuratedSuggestion(event, schema)
   if (!result.ok) return null
 
   const tags = event.tags
-  // `d` and `title` are guaranteed by the schema (normalizeSchema forces them);
+  // `d` and `title` are guaranteed by the schema (normalizeCuratedSchema forces them);
   // `type` is not, so it keeps a fallback for schemas that leave it out.
   const identifier = (tagValue(tags, 'd') ?? '').trim()
   const director = tagValue(tags, 'director')
@@ -188,15 +188,15 @@ export function parseEntry(
     lang: lang ? lang.trim() : null,
     hashtags,
     description: (event.content ?? '').trim(),
-    curated,
-    source: curated ? curationSource(event, schema) : null,
+    canonical,
+    source: canonical ? curatedCanonicalSource(event, schema) : null,
   }
 }
 
 /* ------------------------------ write ------------------------------ */
 
 /** Input collected by the suggestion form — keys are schema field names. */
-export interface SuggestionInput {
+export interface CuratedSuggestionInput {
   title: string
   year: string
   type: VideoType
@@ -212,7 +212,7 @@ export interface SuggestionInput {
 
 export interface ValidationResult {
   ok: boolean
-  errors: Partial<Record<keyof SuggestionInput | 'visibility', string>>
+  errors: Partial<Record<keyof CuratedSuggestionInput | 'visibility', string>>
 }
 
 /**
@@ -221,8 +221,8 @@ export interface ValidationResult {
  * whether this key is allowed to submit at all.
  */
 export function validateInput(
-  input: SuggestionInput,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  input: CuratedSuggestionInput,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
   options: { pubkey?: string } = {},
 ): ValidationResult {
   const errors = validateValues({ ...input }, schema, options)
@@ -236,16 +236,16 @@ export function validateInput(
  * `dOverride` reuses an existing entry's `d` when editing, so the new event
  * replaces the old one instead of creating a duplicate.
  */
-export function buildSuggestion(
-  input: SuggestionInput,
+export function buildCuratedSuggestion(
+  input: CuratedSuggestionInput,
   dOverride?: string,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
 ): EventTemplate {
-  return buildSuggestionTemplate({ ...input }, schema, { identifier: dOverride })
+  return buildCuratedSuggestionTemplate({ ...input }, schema, { identifier: dOverride })
 }
 
-/** Reverse of buildSuggestion: fill the form from an existing entry, for editing. */
-export function videoToInput(video: Video): SuggestionInput {
+/** Reverse of buildCuratedSuggestion: fill the form from an existing entry, for editing. */
+export function videoToInput(video: Video): CuratedSuggestionInput {
   const imdb = video.links.find((l) => l.label === 'imdb')
   const watch = video.links.find((l) => l !== imdb) ?? video.links[0] ?? null
   return {

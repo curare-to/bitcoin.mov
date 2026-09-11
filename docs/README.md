@@ -5,9 +5,13 @@ plumbing around them.
 
 | kind | | who signs it | detail |
 |---|---|---|---|
-| **31889** | **schema event** — what a suggestion may contain, and whose list this is | the curator | [schema-events.md](schema-events.md) |
-| **31888** | **suggestion event** — a title someone proposes | anyone | [suggestion-events.md](suggestion-events.md) |
-| **31890** | **curated event** — a suggestion the curator signed off on | the curator only | [curated-events.md](curated-events.md) |
+| **31889** | **curated schema event** — what a suggestion may contain, and whose list this is | the curator | [curated-schema-events.md](curated-schema-events.md) |
+| **31888** | **curated suggestion event** — a title someone proposes | anyone | [curated-suggestion-events.md](curated-suggestion-events.md) |
+| **31890** | **curated canonical event** — a suggestion the curator signed off on | the curator only | [curated-canonical-events.md](curated-canonical-events.md) |
+
+"Curated" is the family name — the three kinds together are the curated-list
+protocol this site speaks. *Schema*, *suggestion* and *canonical* are what tell
+them apart.
 
 All three are **addressable** (Nostr's 30000–39999 range), so the coordinate
 `(kind, pubkey, d)` is unique and republishing with the same `d` *replaces* the
@@ -18,11 +22,11 @@ makes entries editable, schemas revisable, and every seed script safe to re-run.
 
 ```mermaid
 graph TD
-    S["<b>kind 31889 — schema</b><br/>31889:curator:bitcoin.mov<br/><i>signed by the curator</i>"]
-    A["<b>kind 31888 — suggestion</b><br/>signed by eebb74ab…"]
-    B["<b>kind 31888 — suggestion</b><br/>signed by 839c6398…"]
-    C["<b>kind 31888 — suggestion</b><br/>signed by 8151d833…"]
-    K["<b>kind 31890 — curated</b><br/><i>signed by the curator</i>"]
+    S["<b>kind 31889 — curated schema</b><br/>31889:curator:bitcoin.mov<br/><i>signed by the curator</i>"]
+    A["<b>kind 31888 — curated suggestion</b><br/>signed by eebb74ab…"]
+    B["<b>kind 31888 — curated suggestion</b><br/>signed by 839c6398…"]
+    C["<b>kind 31888 — curated suggestion</b><br/>signed by 8151d833…"]
+    K["<b>kind 31890 — curated canonical</b><br/><i>signed by the curator</i>"]
 
     A -- "a: root" --> S
     B -- "a: root" --> S
@@ -87,9 +91,9 @@ missing one.
 
 | function | checks |
 |---|---|
-| `verifySchemaEvent(event)` | it is a usable kind 31889 schema |
-| `verifySuggestion(event, schema)` | fields, reply root, who may suggest |
-| `verifyCuration(event, schema)` | all of the above, plus kind 31890 signed by the curator |
+| `verifyCuratedSchemaEvent(event)` | it is a usable kind 31889 schema |
+| `verifyCuratedSuggestion(event, schema)` | fields, reply root, who may suggest |
+| `verifyCuratedCanonical(event, schema)` | all of the above, plus kind 31890 signed by the curator |
 
 All three return `{ ok, violations[] }`, where each violation names a field and
 says what is wrong with it. See each event's page for the exact rules.
@@ -102,12 +106,12 @@ npm run verify    # check every entry on a relay and report what fails
 
 | | |
 |---|---|
-| [`lib/nostr/schemaEvent.ts`](../lib/nostr/schemaEvent.ts) | all three kinds — types, defaults, build, parse, verify |
+| [`lib/nostr/curatedSchemaEvent.ts`](../lib/nostr/curatedSchemaEvent.ts) | all three kinds — types, defaults, build, parse, verify |
 | [`lib/nostr/schema.ts`](../lib/nostr/schema.ts) | turning entries into the app's display objects |
 | [`lib/nostr/useVideos.ts`](../lib/nostr/useVideos.ts) | the relay subscriptions |
 | [`scripts/`](../scripts) | publishing, seeding, curating, auditing |
 
-`schemaEvent.ts` is deliberately dependency-free, with no relative imports, so
+`curatedSchemaEvent.ts` is deliberately dependency-free, with no relative imports, so
 plain Node scripts can load it as well as the Next bundle. The seed script and
 the browser therefore verify against the exact same definition rather than two
 copies that drift. Keep it that way.

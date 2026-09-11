@@ -10,14 +10,14 @@
  */
 import { SimplePool } from 'nostr-tools/pool'
 import {
-  CURATION_KIND,
-  DEFAULT_SCHEMA,
-  SCHEMA_KIND,
-  schemaAddress,
-  schemaDisplayName,
-  verifyCuration,
-  verifySuggestion,
-} from '../lib/nostr/schemaEvent.ts'
+  CURATED_CANONICAL_KIND,
+  DEFAULT_CURATED_SCHEMA,
+  CURATED_SCHEMA_KIND,
+  curatedSchemaAddress,
+  curatedSchemaDisplayName,
+  verifyCuratedCanonical,
+  verifyCuratedSuggestion,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 import { RELAYS as READ_RELAYS, done, loadSchema } from './lib.mjs'
 
 async function main() {
@@ -29,12 +29,12 @@ async function main() {
   const { schema, published } = await loadSchema(pool, READ_RELAYS)
   console.log(
     published
-      ? `Using published schema ${schemaAddress(schema)}`
-      : `No kind ${SCHEMA_KIND} schema on the relay — using the bundled one ` +
-          `("${DEFAULT_SCHEMA.identifier}"). Publish it with: npm run seed:schema`,
+      ? `Using published schema ${curatedSchemaAddress(schema)}`
+      : `No kind ${CURATED_SCHEMA_KIND} schema on the relay — using the bundled one ` +
+          `("${DEFAULT_CURATED_SCHEMA.identifier}"). Publish it with: npm run seed:schema`,
   )
   console.log(
-    `  ${schemaDisplayName(schema)} — ${schema.description}\n` +
+    `  ${curatedSchemaDisplayName(schema)} — ${schema.description}\n` +
       `  kind ${schema.kind}, visibility: ${schema.visibility}\n`,
   )
 
@@ -44,7 +44,7 @@ async function main() {
     pool.querySync(READ_RELAYS, { kinds: [schema.kind], limit: 1000 }),
     schema.namespace
       ? pool.querySync(READ_RELAYS, {
-          kinds: [CURATION_KIND],
+          kinds: [CURATED_CANONICAL_KIND],
           authors: [schema.namespace],
           limit: 1000,
         })
@@ -69,8 +69,8 @@ async function main() {
     }
   }
 
-  for (const event of suggestions) check(event, verifySuggestion, 'suggestion')
-  for (const event of curations) check(event, verifyCuration, 'curated')
+  for (const event of suggestions) check(event, verifyCuratedSuggestion, 'suggestion')
+  for (const event of curations) check(event, verifyCuratedCanonical, 'curated')
 
   const total = suggestions.length + curations.length
   console.log(

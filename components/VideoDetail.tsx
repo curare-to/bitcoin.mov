@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { Event } from 'nostr-tools/pure'
 import { pool } from '@/lib/nostr/pool'
-import { READ_RELAYS, SUGGESTION_KIND } from '@/lib/nostr/relays'
+import { READ_RELAYS, CURATED_SUGGESTION_KIND } from '@/lib/nostr/relays'
 import { parseEntry, type Video } from '@/lib/nostr/schema'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { useNip07 } from '@/lib/nostr/useNip07'
@@ -47,7 +47,7 @@ export function VideoDetail() {
     let cancelled = false
     setState('loading')
     pool
-      .get([...READ_RELAYS], { ids: [id], kinds: [SUGGESTION_KIND] })
+      .get([...READ_RELAYS], { ids: [id], kinds: [CURATED_SUGGESTION_KIND] })
       .then((event: Event | null) => {
         if (cancelled) return
         const parsed = event ? parseEntry(event) : null
@@ -120,7 +120,7 @@ export function VideoDetail() {
               {duration && (
                 <span className="text-[var(--color-muted)]">· {duration}</span>
               )}
-              {video.curated && (
+              {video.canonical && (
                 <span
                   className="px-2 py-0.5 rounded-full bg-[var(--color-btc)] text-black font-medium"
                   title="Signed off by the list's curator"
@@ -183,7 +183,7 @@ export function VideoDetail() {
             <span className="font-mono">{shortPubkey(video.pubkey)}</span>
           </p>
 
-          {video.curated && video.source?.pubkey && (
+          {video.canonical && video.source?.pubkey && (
             <p className="text-sm text-[var(--color-muted)]">
               Curated from a suggestion by{' '}
               <span className="font-mono">{shortPubkey(video.source.pubkey)}</span>

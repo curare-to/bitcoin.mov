@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react'
 import { verifyEvent, type Event } from 'nostr-tools/pure'
 import {
-  parseSchemaEvent,
-  SCHEMA_NAMESPACE,
-  type SuggestionSchema,
-} from './schemaEvent'
+  parseCuratedSchemaEvent,
+  CURATED_SCHEMA_NAMESPACE,
+  type CuratedSchema,
+} from './curatedSchemaEvent'
 
 /* ------------------------------------------------------------------ *
  * The schema this site has actually published.
@@ -16,7 +16,7 @@ import {
  * presence is what it means for the site to be accepting suggestions: no file,
  * no published schema, nothing to submit to. So the submit form fetches it,
  * gates on it, and — when it's there — is driven by it, rather than by the
- * bundled DEFAULT_SCHEMA. The bundled copy is what the *reader* side uses to
+ * bundled DEFAULT_CURATED_SCHEMA. The bundled copy is what the *reader* side uses to
  * verify entries off relays; this is what a *writer* is handed to fill in.
  *
  * Same-origin. `<Link>` and asset URLs get next.config's `basePath` applied
@@ -28,7 +28,7 @@ export const SITE_SCHEMA_PATH = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/.wel
 
 export type SiteSchemaState =
   | { status: 'loading'; schema: null; reason: null }
-  | { status: 'ready'; schema: SuggestionSchema; reason: null }
+  | { status: 'ready'; schema: CuratedSchema; reason: null }
   | { status: 'unavailable'; schema: null; reason: string }
 
 const LOADING: SiteSchemaState = { status: 'loading', schema: null, reason: null }
@@ -64,16 +64,16 @@ async function loadSiteSchema(signal: AbortSignal): Promise<SiteSchemaState> {
   // a file is only as trustworthy as the key that signed what's inside it.
   if (!verifyEvent(event as Event)) return unavailable('holds an event whose signature does not verify')
 
-  const schema = parseSchemaEvent(event as Event)
+  const schema = parseCuratedSchemaEvent(event as Event)
   if (!schema) return unavailable('holds an event that is not a usable schema')
 
   // Not fatal — the form should follow what the site publishes — but it means
-  // the reader side (SCHEMA_NAMESPACE) and the writer side disagree about who
+  // the reader side (CURATED_SCHEMA_NAMESPACE) and the writer side disagree about who
   // the curator is, which is a deploy mistake worth surfacing.
-  if (SCHEMA_NAMESPACE && schema.namespace !== SCHEMA_NAMESPACE) {
+  if (CURATED_SCHEMA_NAMESPACE && schema.namespace !== CURATED_SCHEMA_NAMESPACE) {
     console.warn(
       `${SITE_SCHEMA_PATH} was published by ${schema.namespace.slice(0, 8)}…, ` +
-        `but SCHEMA_NAMESPACE is ${SCHEMA_NAMESPACE.slice(0, 8)}…`,
+        `but CURATED_SCHEMA_NAMESPACE is ${CURATED_SCHEMA_NAMESPACE.slice(0, 8)}…`,
     )
   }
 

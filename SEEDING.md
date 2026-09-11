@@ -150,7 +150,7 @@ deploying it is mostly a matter of pointing it somewhere real. In order:
    data — the signed event and your pubkey — so committing it is safe.
    (Generating it in CI instead would mean putting your signing key in CI.
    Don't.)
-4. **`SCHEMA_NAMESPACE`** in `lib/nostr/schemaEvent.ts` must be the key you
+4. **`CURATED_SCHEMA_NAMESPACE`** in `lib/nostr/curatedSchemaEvent.ts` must be the key you
    seeded with. It already is if you haven't changed keys.
 5. **Enable Pages.** Settings → Pages → Source: *GitHub Actions*. The workflow
    in `.github/workflows/pages.yml` deploys on push to `main`.
@@ -177,11 +177,11 @@ NOSTR_NSEC=nsec1... npm run curate -- --id=<event id>
   authors are derived from a fixed salt, so re-running replaces rather than
   duplicates. That also means you can edit `data/seed-films.json` and re-run.
 - The scripts import
-  [`lib/nostr/schemaEvent.ts`](lib/nostr/schemaEvent.ts) directly (Node 22
+  [`lib/nostr/curatedSchemaEvent.ts`](lib/nostr/curatedSchemaEvent.ts) directly (Node 22
   strips the types), so they build and verify events with the *same* code the
   browser runs. There is no second copy to keep in sync.
-- Curation only lights up in the app once `SCHEMA_NAMESPACE` in
-  `lib/nostr/schemaEvent.ts` is set to the curator's pubkey — step 1 prints it.
+- Curation only lights up in the app once `CURATED_SCHEMA_NAMESPACE` in
+  `lib/nostr/curatedSchemaEvent.ts` is set to the curator's pubkey — step 1 prints it.
   Until then the app reads suggestions but not curated entries.
 - Each entry ships with a verified poster `"image"` (https): portrait posters
   from Wikipedia/TMDB where available, otherwise the film's YouTube thumbnail.

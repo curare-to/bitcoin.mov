@@ -33,9 +33,9 @@ For a GitHub Pages sub-path deploy, uncomment `basePath`/`assetPrefix` in
 
 | kind | | who signs it |
 |---|---|---|
-| **31889** | **schema** — the fields a suggestion may carry, and the list's identity | the curator |
-| **31888** | **suggestion** — a title someone proposes, in reply to the schema | anyone |
-| **31890** | **curated entry** — a suggestion the curator signed off on | the curator only |
+| **31889** | **curated schema** — the fields a suggestion may carry, and the list's identity | the curator |
+| **31888** | **curated suggestion** — a title someone proposes, in reply to the schema | anyone |
+| **31890** | **curated canonical** — a suggestion the curator signed off on | the curator only |
 
 A pubkey publishes a schema. Anyone replies to it with suggestions that satisfy
 it. The pubkey that published the schema goes through them and republishes the
@@ -57,11 +57,11 @@ worked examples straight out of the seeded library:
 
 - **[docs/README.md](docs/README.md)** — how the three fit together, a
   walkthrough with real events, and the relay queries that fetch each one
-- **[docs/schema-events.md](docs/schema-events.md)** — kind 31889: field
+- **[docs/curated-schema-events.md](docs/curated-schema-events.md)** — kind 31889: field
   definitions, types and config, identity, visibility
-- **[docs/suggestion-events.md](docs/suggestion-events.md)** — kind 31888: the
+- **[docs/curated-suggestion-events.md](docs/curated-suggestion-events.md)** — kind 31888: the
   reply root, what's required, derived tags, duplicates
-- **[docs/curated-events.md](docs/curated-events.md)** — kind 31890: the curator
+- **[docs/curated-canonical-events.md](docs/curated-canonical-events.md)** — kind 31890: the curator
   gate, the source reference, why it's a copy rather than a pointer
 
 ## Commands

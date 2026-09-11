@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useVideos } from '@/lib/nostr/useVideos'
-import { curatedFilms, type FilmGroup } from '@/lib/util/dedup'
+import { canonicalFilms, type FilmGroup } from '@/lib/util/dedup'
 import { VideoGrid } from './VideoGrid'
 import { FilterBar, DEFAULT_TYPE, type SortMode, type TypeFilter } from './FilterBar'
 
@@ -26,7 +26,7 @@ export function VideoBrowser() {
   const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
   const [sort, setSort] = useState<SortMode>('recent')
 
-  const curated = useMemo(() => curatedFilms(videos), [videos])
+  const curated = useMemo(() => canonicalFilms(videos), [videos])
 
   const groups = useMemo(() => {
     let result = curated

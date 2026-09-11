@@ -29,8 +29,8 @@ export interface FilmGroup {
  * the sibling list on the detail page. The curated entry represents the film;
  * the suggestions behind it are still worth knowing about.
  */
-export function curatedFilms(videos: Video[]): FilmGroup[] {
-  return groupFilms(videos).filter((group) => group.primary.curated)
+export function canonicalFilms(videos: Video[]): FilmGroup[] {
+  return groupFilms(videos).filter((group) => group.primary.canonical)
 }
 
 function normalizeTitle(title: string): string {
@@ -73,7 +73,7 @@ export function groupFilms(videos: Video[]): FilmGroup[] {
     // Input is newest-first, so entries[0] is the newest. A curated entry
     // outranks it: the curator's version represents the film, however many
     // people suggested it or how recently.
-    const primary = entries.find((v) => v.curated) ?? entries[0]
+    const primary = entries.find((v) => v.canonical) ?? entries[0]
     return { key, primary, entries }
   })
 }

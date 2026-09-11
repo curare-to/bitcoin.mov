@@ -1,7 +1,7 @@
 /**
  * Shared plumbing for the seed / schema / curate / verify scripts.
  *
- * Everything schema-related still comes from lib/nostr/schemaEvent.ts — the one
+ * Everything schema-related still comes from lib/nostr/curatedSchemaEvent.ts — the one
  * definition the browser also uses. This module is only the bits a *script*
  * needs: relays, key handling, and talking to a pool.
  */
@@ -9,10 +9,10 @@ import { createHash } from 'node:crypto'
 import { getPublicKey } from 'nostr-tools/pure'
 import * as nip19 from 'nostr-tools/nip19'
 import {
-  DEFAULT_SCHEMA,
-  SCHEMA_KIND,
-  parseSchemaEvent,
-} from '../lib/nostr/schemaEvent.ts'
+  DEFAULT_CURATED_SCHEMA,
+  CURATED_SCHEMA_KIND,
+  parseCuratedSchemaEvent,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 import { WRITE_RELAYS } from '../lib/nostr/relayList.ts'
 
 const args = process.argv.slice(2)
@@ -117,12 +117,12 @@ export function seededAuthors(salt, count) {
  * tell the difference — most of them need to.
  */
 export async function loadSchema(pool, relays = RELAYS) {
-  const events = await pool.querySync(relays, { kinds: [SCHEMA_KIND], limit: 50 })
+  const events = await pool.querySync(relays, { kinds: [CURATED_SCHEMA_KIND], limit: 50 })
   const published = events
-    .map(parseSchemaEvent)
-    .filter((s) => s !== null && s.identifier === DEFAULT_SCHEMA.identifier)
+    .map(parseCuratedSchemaEvent)
+    .filter((s) => s !== null && s.identifier === DEFAULT_CURATED_SCHEMA.identifier)
     .sort((a, b) => (b.source?.createdAt ?? 0) - (a.source?.createdAt ?? 0))[0]
-  return { schema: published ?? DEFAULT_SCHEMA, published: Boolean(published) }
+  return { schema: published ?? DEFAULT_CURATED_SCHEMA, published: Boolean(published) }
 }
 
 /**

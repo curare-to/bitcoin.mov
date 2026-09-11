@@ -1,6 +1,6 @@
-# Schema events (kind 31889)
+# Curated schema events (kind 31889)
 
-A schema event is the definition of a list: which tags a suggestion may carry,
+A curated schema event is the definition of a list: which tags a suggestion may carry,
 which are required, what to show someone while they fill the form in, and whose
 list it is.
 
@@ -134,7 +134,7 @@ entirely would have let linkless entries in.
 `title` and `name` are both required and usually differ. `title` labels the
 event — "bitcoin.mov suggestion". `name` is the publisher — "bitcoin.mov".
 
-`schemaDisplayName()` returns `domain ?? name`: a domain replaces the name
+`curatedSchemaDisplayName()` returns `domain ?? name`: a domain replaces the name
 wherever the list is shown.
 
 > **A domain is a claim, not proof.** Anyone can put any domain in a tag. The
@@ -161,16 +161,16 @@ Relays are open, so `private` is a client-side convention, not encryption.
 Never put secrets in a "private" list.
 
 Visibility governs **suggesting only**. Curation is never delegated — see
-[curated-events.md](curated-events.md).
+[curated-canonical-events.md](curated-canonical-events.md).
 
 ## Rules that can't be opted out of
 
-`normalizeSchema()` runs on every schema, whether bundled or read off a relay.
+`normalizeCuratedSchema()` runs on every schema, whether bundled or read off a relay.
 It forces a `d` field and a `title` field to exist and to be required, putting
 them back if a schema event omits or relaxes them. A schema fetched from a
 hostile relay therefore cannot talk this client into accepting untitled entries.
 
-`verifySchemaEvent(event)` returns the reasons a schema event is unusable:
+`verifyCuratedSchemaEvent(event)` returns the reasons a schema event is unusable:
 
 - not kind 31889
 - missing or over-long `d`, `title`, `name` or `description`
@@ -178,7 +178,7 @@ hostile relay therefore cannot talk this client into accepting untitled entries.
 - a `picture` that isn't https, or a `domain` that isn't a domain
 - no `field` tags at all
 
-`parseSchemaEvent(event)` is the same check, returning the schema or `null`.
+`parseCuratedSchemaEvent(event)` is the same check, returning the schema or `null`.
 
 ## Publishing
 
@@ -189,8 +189,8 @@ NOSTR_NSEC=nsec1... npm run schema
 ```
 
 It prints the coordinate and the next steps. To make the app read curated
-events, set `SCHEMA_NAMESPACE` in
-[`lib/nostr/schemaEvent.ts`](../lib/nostr/schemaEvent.ts) to the pubkey it
+events, set `CURATED_SCHEMA_NAMESPACE` in
+[`lib/nostr/curatedSchemaEvent.ts`](../lib/nostr/curatedSchemaEvent.ts) to the pubkey it
 prints.
 
 ### Served over HTTPS too
@@ -227,7 +227,7 @@ schema — the one the site actually published — rather than the bundled defau
 So a site with no published schema offers no form, rather than a form that
 would build events against a schema nobody signed.
 
-> Setting `SCHEMA_NAMESPACE` also makes the reply root **mandatory** on
+> Setting `CURATED_SCHEMA_NAMESPACE` also makes the reply root **mandatory** on
 > suggestions, so entries published before the schema existed stop verifying.
 > Re-run `npm run seed` — everything is addressable, so entries are replaced by
 > `d` rather than duplicated. `npm run verify` names any that still need it.

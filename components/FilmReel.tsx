@@ -11,7 +11,7 @@ import {
 import Link from 'next/link'
 import { Poster } from './ui/Poster'
 import { useVideos } from '@/lib/nostr/useVideos'
-import { curatedFilms, type FilmGroup } from '@/lib/util/dedup'
+import { canonicalFilms, type FilmGroup } from '@/lib/util/dedup'
 import { DEFAULT_TYPE } from './FilterBar'
 import { typeLabel, timeAgo, isLandscapeThumb } from '@/lib/util/format'
 import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
@@ -30,7 +30,7 @@ export function FilmReel() {
   const [dir, setDir] = useState<'asc' | 'desc'>('asc')
   const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
 
-  const allGroups = useMemo(() => curatedFilms(videos), [videos])
+  const allGroups = useMemo(() => canonicalFilms(videos), [videos])
 
   // Only offer chips for types that actually have films.
   const availableTypes = useMemo(() => {

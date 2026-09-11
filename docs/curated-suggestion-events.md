@@ -1,6 +1,6 @@
-# Suggestion events (kind 31888)
+# Curated suggestion events (kind 31888)
 
-A suggestion is a title someone proposes for the list. It is what a user signs
+A curated suggestion event is a title someone proposes for the list. It is what a user signs
 when they fill in the submit form, and **anyone can publish one** — that is the
 point of the list.
 
@@ -116,14 +116,14 @@ reply conventions. Neither is load-bearing: `a` is what's verified and what
 relays are queried on.
 
 > **The `a` root is required only once the schema has a coordinate to reply to.**
-> While `SCHEMA_NAMESPACE` is empty the schema is unpublished, there is nothing
+> While `CURATED_SCHEMA_NAMESPACE` is empty the schema is unpublished, there is nothing
 > to point at, and suggestions carry no reply tags. Setting it makes the reply
 > mandatory — so suggestions published beforehand stop verifying until they are
 > re-seeded. `npm run verify` says so explicitly when that's what's happening.
 
 ## Verification
 
-`verifySuggestion(event, schema, { pubkey })` returns `{ ok, violations[] }`.
+`verifyCuratedSuggestion(event, schema, { pubkey })` returns `{ ok, violations[] }`.
 
 | check | example violation |
 |---|---|

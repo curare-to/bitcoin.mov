@@ -4,9 +4,9 @@ import { useSyncExternalStore } from 'react'
 import type { Event } from 'nostr-tools/pure'
 import type { Filter } from 'nostr-tools/filter'
 import { pool } from './pool'
-import { READ_RELAYS, SUGGESTION_KIND, NAMESPACE_TAG } from './relays'
+import { READ_RELAYS, CURATED_SUGGESTION_KIND, NAMESPACE_TAG } from './relays'
 import { parseEntry, replaceableKey, type Video } from './schema'
-import { CURATION_KIND, DEFAULT_SCHEMA, schemaAddress } from './schemaEvent'
+import { CURATED_CANONICAL_KIND, DEFAULT_CURATED_SCHEMA, curatedSchemaAddress } from './curatedSchemaEvent'
 
 /* ------------------------------------------------------------------ *
  * The one place a relay subscription lives.
@@ -74,16 +74,16 @@ class VideoStore {
     // Curated entries are a separate kind, so they need their own filter.
     // Overlap is free — `upsert` dedupes by replaceable coordinate.
     const filters: Filter[] = [
-      { kinds: [SUGGESTION_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
+      { kinds: [CURATED_SUGGESTION_KIND], '#t': [NAMESPACE_TAG], limit: 500 },
     ]
-    const address = schemaAddress(DEFAULT_SCHEMA)
+    const address = curatedSchemaAddress(DEFAULT_CURATED_SCHEMA)
     if (address) {
-      filters.push({ kinds: [SUGGESTION_KIND], '#a': [address], limit: 500 })
-      // Curated entries, from the schema's author only. `verifyCuration`
+      filters.push({ kinds: [CURATED_SUGGESTION_KIND], '#a': [address], limit: 500 })
+      // Curated entries, from the schema's author only. `verifyCuratedCanonical`
       // enforces that too; scoping the filter just saves the relay the work.
       filters.push({
-        kinds: [CURATION_KIND],
-        authors: [DEFAULT_SCHEMA.namespace],
+        kinds: [CURATED_CANONICAL_KIND],
+        authors: [DEFAULT_CURATED_SCHEMA.namespace],
         '#a': [address],
         limit: 500,
       })

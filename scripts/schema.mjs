@@ -42,17 +42,17 @@ import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
 import { RELAYS, publish } from './lib.mjs'
 import {
-  DEFAULT_SCHEMA,
-  SCHEMA_CAP,
-  SCHEMA_KIND,
+  DEFAULT_CURATED_SCHEMA,
+  CURATED_SCHEMA_CAP,
+  CURATED_SCHEMA_KIND,
   VISIBILITIES,
-  buildSchemaTemplate,
+  buildCuratedSchemaTemplate,
   fieldTag,
   isValidDomain,
   normalizeDomain,
-  schemaDisplayName,
-  verifySchemaEvent,
-} from '../lib/nostr/schemaEvent.ts'
+  curatedSchemaDisplayName,
+  verifyCuratedSchemaEvent,
+} from '../lib/nostr/curatedSchemaEvent.ts'
 
 // Shared with every other script, so `--relay=ws://…` aims a run somewhere else.
 const WRITE_RELAYS = RELAYS
@@ -81,7 +81,7 @@ function flag(name) {
 
 /** Apply --visibility / --author overrides to the bundled schema. */
 function resolveSchema() {
-  const schema = { ...DEFAULT_SCHEMA, authors: [...DEFAULT_SCHEMA.authors] }
+  const schema = { ...DEFAULT_CURATED_SCHEMA, authors: [...DEFAULT_CURATED_SCHEMA.authors] }
 
   const [visibility] = flag('visibility')
   if (visibility) {
@@ -109,8 +109,8 @@ function resolveSchema() {
   // replace a value that's already there.
   const [name] = flag('name')
   if (name) {
-    if (name.trim().length === 0 || name.length > SCHEMA_CAP.name) {
-      console.error(`--name must be 1-${SCHEMA_CAP.name} characters.`)
+    if (name.trim().length === 0 || name.length > CURATED_SCHEMA_CAP.name) {
+      console.error(`--name must be 1-${CURATED_SCHEMA_CAP.name} characters.`)
       process.exit(1)
     }
     schema.name = name.trim()
@@ -118,8 +118,8 @@ function resolveSchema() {
 
   const [description] = flag('description')
   if (description) {
-    if (description.length > SCHEMA_CAP.description) {
-      console.error(`--description must be at most ${SCHEMA_CAP.description} characters.`)
+    if (description.length > CURATED_SCHEMA_CAP.description) {
+      console.error(`--description must be at most ${CURATED_SCHEMA_CAP.description} characters.`)
       process.exit(1)
     }
     schema.description = description.trim()
@@ -149,7 +149,7 @@ function resolveSchema() {
 /** Human-readable summary of what the schema asks users for. */
 function printSchema(schema) {
   console.log(`Schema "${schema.identifier}" — ${schema.title}`)
-  console.log(`  shown as:   ${schemaDisplayName(schema)}`)
+  console.log(`  shown as:   ${curatedSchemaDisplayName(schema)}`)
   console.log(
     `  name:       ${schema.name}` +
       (schema.domain ? '  (overridden by the domain above)' : ''),
@@ -187,7 +187,7 @@ function printSchema(schema) {
  * curator's pubkey and relay hints out of it without understanding anything
  * else in the file. Note this is *not* the NIP-05 path — that is
  * `/.well-known/nostr.json` at the domain root, and `verifyDomain()` in
- * schemaEvent.ts is what checks it. This file says "here is the schema";
+ * curatedSchemaEvent.ts is what checks it. This file says "here is the schema";
  * NIP-05 says "here is who I am".
  */
 async function writeWellKnown(event, schema, pubkey) {
@@ -197,7 +197,7 @@ async function writeWellKnown(event, schema, pubkey) {
   // a public/.gitkeep so this normally can't happen, but say so if it does.
   const fresh = !existsSync(join(repoRoot, 'public'))
   const document = {
-    coordinate: `${SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
+    coordinate: `${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}`,
     names: { _: pubkey },
     relays: { [pubkey]: [...WRITE_RELAYS] },
     schema: event,
@@ -210,12 +210,12 @@ async function writeWellKnown(event, schema, pubkey) {
 
 async function main() {
   const schema = resolveSchema()
-  const template = buildSchemaTemplate(schema)
+  const template = buildCuratedSchemaTemplate(schema)
 
   printSchema(schema)
 
   if (dryRun) {
-    console.log(`\nDRY RUN — kind ${SCHEMA_KIND} event:\n`)
+    console.log(`\nDRY RUN — kind ${CURATED_SCHEMA_KIND} event:\n`)
     console.log(JSON.stringify(template, null, 2))
     console.log('\nNo key used, nothing published. Re-run without --dry-run to publish.')
     return
@@ -244,7 +244,7 @@ async function main() {
   const event = finalizeEvent(template, sk)
 
   // Round-trip check: what a client reads back must be what we meant to say.
-  const readBack = verifySchemaEvent(event)
+  const readBack = verifyCuratedSchemaEvent(event)
   if (!readBack.ok) {
     console.error('\nThe schema event is not valid. Aborting:\n')
     for (const v of readBack.violations) console.error(`  ${v.field}: ${v.message}`)
@@ -273,9 +273,9 @@ async function main() {
 
   if (accepted > 0) {
     console.log(
-      `\nCoordinate: ${SCHEMA_KIND}:${pubkey}:${schema.identifier}\n\n` +
+      `\nCoordinate: ${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}\n\n` +
         'Next:\n' +
-        '  1. Set SCHEMA_NAMESPACE in lib/nostr/schemaEvent.ts to:\n' +
+        '  1. Set CURATED_SCHEMA_NAMESPACE in lib/nostr/curatedSchemaEvent.ts to:\n' +
         `       '${pubkey}'\n` +
         '  2. Re-run `npm run seed`.\n\n' +
         'Suggestions are replies to this schema, so they must carry its `a`\n' +

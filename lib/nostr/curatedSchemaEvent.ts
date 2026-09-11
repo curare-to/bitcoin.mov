@@ -1,18 +1,28 @@
 import type { Event, EventTemplate } from 'nostr-tools/pure'
 
 /* ------------------------------------------------------------------ *
- * kind 31889 — the bitcoin.mov *schema* event.
+ * The curated-list events — the three kinds this site speaks.
  *
- * A schema event describes the form users fill in to suggest a title: which
- * tags a kind 31888 *suggestion event* may carry, what each one means, whether
- * it is required, and what to show while they fill it in. It is itself an
+ *   31889  curated schema event      the definition of a list, by its curator
+ *   31888  curated suggestion event  a title anyone proposes, in reply to it
+ *   31890  curated canonical event   a suggestion the curator signed off on
+ *
+ * "Curated" is the family name; schema / suggestion / canonical tell them
+ * apart. This module defines all three: their shapes, the default schema, and
+ * how to build, parse and verify each.
+ *
+ * A curated schema event describes the form users fill in to suggest a title:
+ * which tags a suggestion may carry, what each one means, whether it is
+ * required, and what to show while they fill it in. It is itself an
  * addressable event, so the curator can revise it in place — and because it
  * lives on a relay, other clients can render the same form without shipping
  * this repo's code.
  *
  * A suggestion is published as a **reply to the schema event**: it carries the
  * schema's `a` coordinate as its root, so the list is literally the thread of
- * replies to its own schema, and `#a` is the query that fetches it.
+ * replies to its own schema, and `#a` is the query that fetches it. A
+ * canonical event is the same shape again, signed by the curator, pointing
+ * back at the suggestion it came from.
  *
  * The namespace is the schema author's **pubkey**: the coordinate
  * `31889:<pubkey>:<d>` fully identifies one schema. There is no global
@@ -26,22 +36,22 @@ import type { Event, EventTemplate } from 'nostr-tools/pure'
  * that way: anything imported here has to be importable from both worlds.
  * ------------------------------------------------------------------ */
 
-/** The kind a suggestion event is published under, in reply to its schema. */
-export const SUGGESTION_KIND = 31888
+/** A curated suggestion event: a title anyone proposes, in reply to the schema. */
+export const CURATED_SUGGESTION_KIND = 31888
 
-/** The kind this module defines: a schema for SUGGESTION_KIND events. */
-export const SCHEMA_KIND = 31889
+/** A curated schema event: the definition of a list, published by its curator. */
+export const CURATED_SCHEMA_KIND = 31889
 
 /**
- * The kind a *curated* entry is published under.
+ * A curated canonical event: the version of a title the curator signed off on.
  *
  * Anyone may suggest; only the pubkey that published the schema may curate.
- * A curated event is a suggestion the curator has signed off on — same fields,
+ * A canonical event is a suggestion the curator has accepted — same fields,
  * same schema rules, but authored by the curator and (usually) pointing back at
  * the suggestion it came from. Addressable like the rest, so re-publishing with
  * the same `d` revises a curation rather than adding a second one.
  */
-export const CURATION_KIND = 31890
+export const CURATED_CANONICAL_KIND = 31890
 
 export const VIDEO_TYPES = [
   'movie',
@@ -148,12 +158,12 @@ export interface FieldDef {
 
 /* ----------------------------- schema ------------------------------ */
 
-export interface SuggestionSchema {
+export interface CuratedSchema {
   /** The schema event's `d` tag. */
   identifier: string
   /**
    * The schema author's pubkey (hex) — the namespace. Empty for a schema that
-   * has not been published yet; `schemaAddress` returns null in that case.
+   * has not been published yet; `curatedSchemaAddress` returns null in that case.
    */
   namespace: string
   /** Required, like every event this project publishes. Labels the event. */
@@ -162,7 +172,7 @@ export interface SuggestionSchema {
    * Required. The list's identity — what people call it. `title` labels the
    * event ("bitcoin.mov suggestion"); `name` is who's publishing it
    * ("bitcoin.mov"). Superseded by `domain` for display when one is set —
-   * see `schemaDisplayName`.
+   * see `curatedSchemaDisplayName`.
    */
   name: string
   /** Required. What this list is for. */
@@ -207,7 +217,7 @@ export interface SuggestionSchema {
  * after publishing: kind 31888 is addressable, so re-seeding replaces each
  * entry by its `d` rather than duplicating it.
  */
-export const SCHEMA_NAMESPACE =
+export const CURATED_SCHEMA_NAMESPACE =
   '94318e82c0a05acebded80aedb368932625e769430161dacd0dc3ade7ba52793'
 
 /**
@@ -219,7 +229,7 @@ export const NAMESPACE_HASHTAG = 'bitcoin'
 /* ----------------------------- helpers ----------------------------- */
 
 /** Length caps on the schema event's own identity tags. */
-export const SCHEMA_CAP = {
+export const CURATED_SCHEMA_CAP = {
   name: 100,
   title: 200,
   description: 500,
@@ -257,7 +267,7 @@ export function isValidDomain(value: string): boolean {
  * A domain is the stronger identity — it's the one thing here that can be
  * checked against the outside world (`verifyDomain`).
  */
-export function schemaDisplayName(schema: SuggestionSchema): string {
+export function curatedSchemaDisplayName(schema: CuratedSchema): string {
   return schema.domain ?? schema.name
 }
 
@@ -268,7 +278,7 @@ export function schemaDisplayName(schema: SuggestionSchema): string {
  * Opt-in and network-bound — nothing here calls it for you. Until you do, a
  * domain is a self-assigned label, so don't render it as verified.
  */
-export async function verifyDomain(schema: SuggestionSchema): Promise<boolean> {
+export async function verifyDomain(schema: CuratedSchema): Promise<boolean> {
   if (!schema.domain || !schema.namespace) return false
   try {
     const url = `https://${schema.domain}/.well-known/nostr.json?name=_`
@@ -288,26 +298,26 @@ export function fieldTag(field: FieldDef): string {
 }
 
 export function findField(
-  schema: SuggestionSchema,
+  schema: CuratedSchema,
   name: string,
 ): FieldDef | null {
   return schema.fields.find((f) => f.name === name) ?? null
 }
 
 /** Fields a form should actually prompt for — derived ones are filled in. */
-export function formFields(schema: SuggestionSchema): FieldDef[] {
+export function formFields(schema: CuratedSchema): FieldDef[] {
   return schema.fields.filter((f) => !f.config.derived)
 }
 
 /** Addressable coordinate of the schema, or null if it isn't published yet. */
-export function schemaAddress(schema: SuggestionSchema): string | null {
+export function curatedSchemaAddress(schema: CuratedSchema): string | null {
   if (!schema.namespace) return null
-  return `${SCHEMA_KIND}:${schema.namespace}:${schema.identifier}`
+  return `${CURATED_SCHEMA_KIND}:${schema.namespace}:${schema.identifier}`
 }
 
 /** May this pubkey submit under this schema? */
 export function canSuggest(
-  schema: SuggestionSchema,
+  schema: CuratedSchema,
   pubkey: string | null | undefined,
 ): boolean {
   if (schema.visibility === 'public') return true
@@ -324,7 +334,7 @@ export function canSuggest(
  * own tag on the schema event — there isn't one yet.)
  */
 export function canCurate(
-  schema: SuggestionSchema,
+  schema: CuratedSchema,
   pubkey: string | null | undefined,
 ): boolean {
   return Boolean(pubkey) && Boolean(schema.namespace) && pubkey === schema.namespace
@@ -372,7 +382,7 @@ function intOrNull(value: string): number | null {
  * schema event off a relay claims: it must carry a `d` tag and a `title`.
  * A schema that omits or relaxes either gets them put back.
  */
-export function normalizeSchema(schema: SuggestionSchema): SuggestionSchema {
+export function normalizeCuratedSchema(schema: CuratedSchema): CuratedSchema {
   const fields = schema.fields.slice()
 
   for (const [tag, fallback] of MANDATORY_FIELDS) {
@@ -420,9 +430,9 @@ const MANDATORY_FIELDS: [string, FieldDef][] = [
  * data/seed-films.json satisfies, and the shape the submit form collects —
  * `npm run seed:dry` verifies both against it.
  */
-export const DEFAULT_SCHEMA: SuggestionSchema = normalizeSchema({
+export const DEFAULT_CURATED_SCHEMA: CuratedSchema = normalizeCuratedSchema({
   identifier: 'bitcoin.mov',
-  namespace: SCHEMA_NAMESPACE,
+  namespace: CURATED_SCHEMA_NAMESPACE,
   title: 'bitcoin.mov suggestion',
   name: 'bitcoin.mov',
   description:
@@ -433,7 +443,7 @@ export const DEFAULT_SCHEMA: SuggestionSchema = normalizeSchema({
   // /.well-known/nostr.json from — pass `npm run schema -- --domain=…`.
   profileImageUrl: null,
   domain: null,
-  kind: SUGGESTION_KIND,
+  kind: CURATED_SUGGESTION_KIND,
   visibility: 'public',
   requireAny: [['watchUrl', 'imdbUrl']],
   authors: [],
@@ -598,7 +608,7 @@ function requiredText(
   tag: string,
   label: string,
   cap: number,
-  violations: SchemaViolation[],
+  violations: CuratedSchemaViolation[],
 ): string {
   const value = (tagValue(tags, tag) ?? '').trim()
   if (!value) {
@@ -614,39 +624,39 @@ function requiredText(
 
 /**
  * Read a kind 31889 event, collecting every reason it isn't a usable schema.
- * Shared by `verifySchemaEvent` (which wants the reasons) and
- * `parseSchemaEvent` (which just wants the schema or nothing).
+ * Shared by `verifyCuratedSchemaEvent` (which wants the reasons) and
+ * `parseCuratedSchemaEvent` (which just wants the schema or nothing).
  */
 function readSchemaEvent(event: Event): {
-  schema: SuggestionSchema | null
-  violations: SchemaViolation[]
+  schema: CuratedSchema | null
+  violations: CuratedSchemaViolation[]
 } {
-  const violations: SchemaViolation[] = []
+  const violations: CuratedSchemaViolation[] = []
 
-  if (event.kind !== SCHEMA_KIND) {
+  if (event.kind !== CURATED_SCHEMA_KIND) {
     return {
       schema: null,
       violations: [
-        { field: 'kind', message: `Expected kind ${SCHEMA_KIND}, got ${event.kind}.` },
+        { field: 'kind', message: `Expected kind ${CURATED_SCHEMA_KIND}, got ${event.kind}.` },
       ],
     }
   }
 
   const tags = Array.isArray(event.tags) ? event.tags : []
 
-  const identifier = requiredText(tags, 'd', 'Identifier', SCHEMA_CAP.name, violations)
-  const title = requiredText(tags, 'title', 'Title', SCHEMA_CAP.title, violations)
-  const name = requiredText(tags, 'name', 'Name', SCHEMA_CAP.name, violations)
+  const identifier = requiredText(tags, 'd', 'Identifier', CURATED_SCHEMA_CAP.name, violations)
+  const title = requiredText(tags, 'title', 'Title', CURATED_SCHEMA_CAP.title, violations)
+  const name = requiredText(tags, 'name', 'Name', CURATED_SCHEMA_CAP.name, violations)
 
   // Description lives in the `description` tag; `content` mirrors it so that
   // generic Nostr clients show something useful. Tag wins, content is fallback.
   const described = (tagValue(tags, 'description') ?? event.content ?? '').trim()
   if (!described) {
     violations.push({ field: 'description', message: 'Description is required.' })
-  } else if (described.length > SCHEMA_CAP.description) {
+  } else if (described.length > CURATED_SCHEMA_CAP.description) {
     violations.push({
       field: 'description',
-      message: `Description must be at most ${SCHEMA_CAP.description} characters.`,
+      message: `Description must be at most ${CURATED_SCHEMA_CAP.description} characters.`,
     })
   }
 
@@ -668,7 +678,7 @@ function readSchemaEvent(event: Event): {
   const rawPicture = (tagValue(tags, 'picture') ?? '').trim()
   let profileImageUrl: string | null = null
   if (rawPicture) {
-    if (isSafeUrl(rawPicture, true) && rawPicture.length <= SCHEMA_CAP.url) {
+    if (isSafeUrl(rawPicture, true) && rawPicture.length <= CURATED_SCHEMA_CAP.url) {
       profileImageUrl = rawPicture
     } else {
       violations.push({
@@ -713,7 +723,7 @@ function readSchemaEvent(event: Event): {
     .filter((t) => t[0] === 'p' && typeof t[1] === 'string')
     .map((t) => t[1])
 
-  const schema = normalizeSchema({
+  const schema = normalizeCuratedSchema({
     identifier,
     namespace: event.pubkey,
     title,
@@ -721,7 +731,7 @@ function readSchemaEvent(event: Event): {
     description: described,
     profileImageUrl,
     domain,
-    kind: intOrNull(tagValue(tags, 'k') ?? '') ?? SUGGESTION_KIND,
+    kind: intOrNull(tagValue(tags, 'k') ?? '') ?? CURATED_SUGGESTION_KIND,
     visibility: rawVisibility as Visibility,
     fields,
     requireAny,
@@ -734,10 +744,10 @@ function readSchemaEvent(event: Event): {
 
 /**
  * Check a kind 31889 event and say what's wrong with it. Use this when someone
- * needs the reason (publishing, auditing); use `parseSchemaEvent` when you just
+ * needs the reason (publishing, auditing); use `parseCuratedSchemaEvent` when you just
  * want a schema you can trust.
  */
-export function verifySchemaEvent(event: Event): SchemaVerification {
+export function verifyCuratedSchemaEvent(event: Event): CuratedSchemaVerification {
   const { violations } = readSchemaEvent(event)
   return { ok: violations.length === 0, violations }
 }
@@ -747,18 +757,18 @@ export function verifySchemaEvent(event: Event): SchemaVerification {
  * Like `parseSuggestion`, this is defensive: relays hand us partial and hostile
  * events, and a schema that can't be trusted is worse than no schema at all.
  */
-export function parseSchemaEvent(event: Event): SuggestionSchema | null {
+export function parseCuratedSchemaEvent(event: Event): CuratedSchema | null {
   return readSchemaEvent(event).schema
 }
 
 /* -------------------- write: schema → relay ------------------------ */
 
 /** Build the unsigned kind 31889 event that publishes a schema. */
-export function buildSchemaTemplate(
-  schema: SuggestionSchema,
+export function buildCuratedSchemaTemplate(
+  schema: CuratedSchema,
   createdAt = Math.floor(Date.now() / 1000),
 ): EventTemplate {
-  const normalized = normalizeSchema(schema)
+  const normalized = normalizeCuratedSchema(schema)
   const tags: string[][] = [
     ['d', normalized.identifier],
     ['title', normalized.title],
@@ -787,7 +797,7 @@ export function buildSchemaTemplate(
   for (const pubkey of normalized.authors) tags.push(['p', pubkey])
 
   return {
-    kind: SCHEMA_KIND,
+    kind: CURATED_SCHEMA_KIND,
     created_at: createdAt,
     tags,
     // Mirrors the `description` tag so generic Nostr clients — which read
@@ -799,7 +809,7 @@ export function buildSchemaTemplate(
 /* ------------------ write: values → suggestion --------------------- */
 
 /** A form's collected values, keyed by field name. */
-export type SuggestionValues = Record<string, string>
+export type CuratedSuggestionValues = Record<string, string>
 
 export interface BuildOptions {
   /** Reuse an existing entry's `d` so this event replaces it. */
@@ -812,7 +822,7 @@ export interface BuildOptions {
  * Deterministic `d` for a suggestion: the external id when given (so "the same
  * film" stays one editable entry across edits), else a title+year slug.
  */
-export function deriveIdentifier(values: SuggestionValues): string {
+export function deriveIdentifier(values: CuratedSuggestionValues): string {
   const ext = (values.externalId ?? '').trim().toLowerCase()
   if (ext) return ext
   const year = intOrNull(values.year ?? '')
@@ -824,7 +834,7 @@ export function deriveIdentifier(values: SuggestionValues): string {
 /** Derived tag values the app fills in rather than prompting for. */
 function derivedValues(
   field: FieldDef,
-  values: SuggestionValues,
+  values: CuratedSuggestionValues,
   options: BuildOptions,
 ): string[] {
   switch (fieldTag(field)) {
@@ -850,18 +860,18 @@ function derivedValues(
  *
  * `p` notifies the schema's author and `k` names the kind being replied to,
  * per the usual reply conventions. Neither is load-bearing — `a` is what
- * `verifySuggestion` requires and what relays are queried on (`#a`).
+ * `verifyCuratedSuggestion` requires and what relays are queried on (`#a`).
  *
  * An unpublished schema has no coordinate to reply to, so this is empty until
- * SCHEMA_NAMESPACE is set.
+ * CURATED_SCHEMA_NAMESPACE is set.
  */
-export function replyTags(schema: SuggestionSchema): string[][] {
-  const address = schemaAddress(schema)
+export function replyTags(schema: CuratedSchema): string[][] {
+  const address = curatedSchemaAddress(schema)
   if (!address) return []
   return [
     ['a', address, '', 'root'],
     ['p', schema.namespace],
-    ['k', String(SCHEMA_KIND)],
+    ['k', String(CURATED_SCHEMA_KIND)],
   ]
 }
 
@@ -869,13 +879,13 @@ export function replyTags(schema: SuggestionSchema): string[][] {
  * Build the unsigned suggestion event from a form's values, using the schema
  * as the tag layout, and address it as a reply to the schema event.
  *
- * The result is guaranteed to satisfy `verifySuggestion` against the same
+ * The result is guaranteed to satisfy `verifyCuratedSuggestion` against the same
  * schema (given values that pass `validateValues`) — the read and write sides
  * cannot drift, because both walk this one field list.
  */
-export function buildSuggestionTemplate(
-  values: SuggestionValues,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+export function buildCuratedSuggestionTemplate(
+  values: CuratedSuggestionValues,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
   options: BuildOptions = {},
 ): EventTemplate {
   const { tags, content } = fieldTags(values, schema, options)
@@ -895,8 +905,8 @@ export function buildSuggestionTemplate(
  * suggestion it came from, and both answer to the same verifier.
  */
 function fieldTags(
-  values: SuggestionValues,
-  schema: SuggestionSchema,
+  values: CuratedSuggestionValues,
+  schema: CuratedSchema,
   options: BuildOptions,
 ): { tags: string[][]; content: string } {
   const tags: string[][] = []
@@ -945,7 +955,7 @@ export function parseCoordinate(
 }
 
 /** Where a curated entry came from: the suggestion the curator accepted. */
-export interface SuggestionRef {
+export interface CuratedSuggestionRef {
   /** Event id of the exact version curated — provenance, pinned. */
   id: string
   /** Coordinate `31888:<pubkey>:<d>`, which follows the suggester's edits. */
@@ -955,10 +965,10 @@ export interface SuggestionRef {
 }
 
 /** Describe a suggestion event so a curated entry can point back at it. */
-export function suggestionRef(
+export function curatedSuggestionRef(
   event: { id: string; pubkey: string; tags: string[][] },
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
-): SuggestionRef | null {
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
+): CuratedSuggestionRef | null {
   const tags = Array.isArray(event.tags) ? event.tags : []
   const d = (tags.find((t) => t[0] === 'd' && typeof t[1] === 'string')?.[1] ?? '').trim()
   if (!d || !event.pubkey) return null
@@ -970,10 +980,10 @@ export function suggestionRef(
 }
 
 /** Read the source reference back off a curated entry. */
-export function curationSource(
-  event: SuggestionLike,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
-): SuggestionRef | null {
+export function curatedCanonicalSource(
+  event: CuratedSuggestionLike,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
+): CuratedSuggestionRef | null {
   const tags = Array.isArray(event.tags) ? event.tags : []
   const address = tags.find(
     (t) => t[0] === 'a' && typeof t[1] === 'string' && t[1].startsWith(`${schema.kind}:`),
@@ -985,7 +995,7 @@ export function curationSource(
 }
 
 /** Both tags: the coordinate (follows edits) and the id (pins what was seen). */
-function sourceTags(source: SuggestionRef | null): string[][] {
+function sourceTags(source: CuratedSuggestionRef | null): string[][] {
   if (!source) return []
   const tags: string[][] = [['a', source.address, '', 'mention']]
   if (source.id) tags.push(['e', source.id, '', 'mention'])
@@ -1005,10 +1015,10 @@ function sourceTags(source: SuggestionRef | null): string[][] {
  *
  * `source` is optional — a curator may add an entry nobody suggested.
  */
-export function buildCurationTemplate(
-  values: SuggestionValues,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
-  source: SuggestionRef | null = null,
+export function buildCuratedCanonicalTemplate(
+  values: CuratedSuggestionValues,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
+  source: CuratedSuggestionRef | null = null,
   options: BuildOptions = {},
 ): EventTemplate {
   const { tags, content } = fieldTags(values, schema, options)
@@ -1016,7 +1026,7 @@ export function buildCurationTemplate(
   tags.push(...sourceTags(source))
 
   return {
-    kind: CURATION_KIND,
+    kind: CURATED_CANONICAL_KIND,
     created_at: options.createdAt ?? Math.floor(Date.now() / 1000),
     tags,
     content,
@@ -1030,14 +1040,14 @@ export function buildCurationTemplate(
  * layer, which plain Node can't import.
  */
 export function eventToValues(
-  event: SuggestionLike,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
-): SuggestionValues {
-  const subject: SuggestionLike = {
+  event: CuratedSuggestionLike,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
+): CuratedSuggestionValues {
+  const subject: CuratedSuggestionLike = {
     ...event,
     tags: Array.isArray(event.tags) ? event.tags : [],
   }
-  const values: SuggestionValues = {}
+  const values: CuratedSuggestionValues = {}
   for (const field of schema.fields) {
     const found = valuesOf(field, subject)
     if (found.length > 0) values[field.name] = found[0]
@@ -1056,7 +1066,7 @@ function textCap(field: FieldDef): number | undefined {
 
 /* ---------------------------- verify ------------------------------- */
 
-export interface SchemaViolation {
+export interface CuratedSchemaViolation {
   /**
    * The offending field's name, or a schema-level rule (`kind`, `schema`,
    * `visibility`). For a `require-any` group it is the group's first field, so
@@ -1066,13 +1076,13 @@ export interface SchemaViolation {
   message: string
 }
 
-export interface SchemaVerification {
+export interface CuratedSchemaVerification {
   ok: boolean
-  violations: SchemaViolation[]
+  violations: CuratedSchemaViolation[]
 }
 
 /** Anything with the shape of a suggestion — a signed event or a template. */
-export interface SuggestionLike {
+export interface CuratedSuggestionLike {
   kind: number
   tags: string[][]
   content: string
@@ -1128,7 +1138,7 @@ export function checkValue(field: FieldDef, value: string): string | null {
 }
 
 /** Every value a field holds in an event (its tags, or the content body). */
-function valuesOf(field: FieldDef, event: SuggestionLike): string[] {
+function valuesOf(field: FieldDef, event: CuratedSuggestionLike): string[] {
   const tag = fieldTag(field)
   if (tag === CONTENT_TAG) {
     const content = (event.content ?? '').trim()
@@ -1153,16 +1163,16 @@ function valuesOf(field: FieldDef, event: SuggestionLike): string[] {
  *
  * Unknown tags are permitted — other clients legitimately add their own — but
  * every field the schema *does* define is checked, and `d` and `title` are
- * always required (see `normalizeSchema`).
+ * always required (see `normalizeCuratedSchema`).
  *
  * Pass `pubkey` when verifying an unsigned template, so a non-public schema
  * can still check who is about to sign it.
  */
-export function verifySuggestion(
-  event: SuggestionLike,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+export function verifyCuratedSuggestion(
+  event: CuratedSuggestionLike,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
   options: { pubkey?: string } = {},
-): SchemaVerification {
+): CuratedSchemaVerification {
   return verifyEntry(event, schema, schema.kind, options)
 }
 
@@ -1179,12 +1189,12 @@ export function verifySuggestion(
  * The reference back to the suggestion it came from is optional: a curator may
  * add an entry nobody suggested. When present it must be well formed.
  */
-export function verifyCuration(
-  event: SuggestionLike,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+export function verifyCuratedCanonical(
+  event: CuratedSuggestionLike,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
   options: { pubkey?: string } = {},
-): SchemaVerification {
-  const result = verifyEntry(event, schema, CURATION_KIND, options)
+): CuratedSchemaVerification {
+  const result = verifyEntry(event, schema, CURATED_CANONICAL_KIND, options)
   const violations = [...result.violations]
   const tags = Array.isArray(event.tags) ? event.tags : []
 
@@ -1220,14 +1230,14 @@ export function verifyCuration(
 
 /** Shared field/reply checking for both suggestions and curated entries. */
 function verifyEntry(
-  event: SuggestionLike,
-  schema: SuggestionSchema,
+  event: CuratedSuggestionLike,
+  schema: CuratedSchema,
   expectedKind: number,
   options: { pubkey?: string },
-): SchemaVerification {
-  const violations: SchemaViolation[] = []
+): CuratedSchemaVerification {
+  const violations: CuratedSchemaViolation[] = []
   const tags = Array.isArray(event.tags) ? event.tags : []
-  const subject: SuggestionLike = { ...event, tags }
+  const subject: CuratedSuggestionLike = { ...event, tags }
 
   if (event.kind !== expectedKind) {
     violations.push({
@@ -1238,15 +1248,15 @@ function verifyEntry(
 
   // A suggestion is a reply to its schema, so the root `a` tag is required —
   // but only once the schema has a coordinate to reply to. An unpublished
-  // schema (empty SCHEMA_NAMESPACE) has nothing to point at, so suggestions
+  // schema (empty CURATED_SCHEMA_NAMESPACE) has nothing to point at, so suggestions
   // made before it was published stay valid until it is. Only schema
   // coordinates count here; entries carry `a` tags for other reasons too.
-  const address = schemaAddress(schema)
+  const address = curatedSchemaAddress(schema)
   if (address) {
     const roots = tags
       .filter((t) => t[0] === 'a' && typeof t[1] === 'string')
       .map((t) => t[1])
-      .filter((value) => value.startsWith(`${SCHEMA_KIND}:`))
+      .filter((value) => value.startsWith(`${CURATED_SCHEMA_KIND}:`))
     if (roots.length === 0) {
       violations.push({
         field: 'schema',
@@ -1316,7 +1326,7 @@ function verifyEntry(
   return { ok: violations.length === 0, violations }
 }
 
-function requireAnyMessage(schema: SuggestionSchema, group: string[]): string {
+function requireAnyMessage(schema: CuratedSchema, group: string[]): string {
   const labels = group.map((name) => findField(schema, name)?.label ?? name)
   return `Provide at least one of: ${labels.join(', ')}.`
 }
@@ -1325,11 +1335,11 @@ function requireAnyMessage(schema: SuggestionSchema, group: string[]): string {
 
 /**
  * Validate a form's values before we bother the signer extension. Same rules
- * as `verifySuggestion`, minus the derived fields the app fills in itself.
+ * as `verifyCuratedSuggestion`, minus the derived fields the app fills in itself.
  */
 export function validateValues(
-  values: SuggestionValues,
-  schema: SuggestionSchema = DEFAULT_SCHEMA,
+  values: CuratedSuggestionValues,
+  schema: CuratedSchema = DEFAULT_CURATED_SCHEMA,
   options: { pubkey?: string } = {},
 ): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -1365,7 +1375,7 @@ export function validateValues(
  * a form can't crash on a schema that omits the field.
  */
 export function fieldProps(
-  schema: SuggestionSchema,
+  schema: CuratedSchema,
   name: string,
 ): { label: string; placeholder: string; hint?: string; required: boolean } {
   const field = findField(schema, name)

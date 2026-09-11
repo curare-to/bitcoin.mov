@@ -1,6 +1,7 @@
-# Curated events (kind 31890)
+# Curated canonical events (kind 31890)
 
-A curated event is a suggestion the curator has signed off on. It is the
+A curated canonical event is a suggestion the curator has signed off on — the
+canonical version of a title, as far as this list is concerned. It is the
 editorial layer: anyone may suggest, but only the pubkey that published the
 schema may curate.
 
@@ -49,7 +50,7 @@ Bitcoin*:
 
 Three blocks: the film, the reply to the schema, the reference to the
 suggestion. Compare it with the same film's [suggestion
-event](suggestion-events.md#a-real-one) — the first two blocks are identical.
+event](curated-suggestion-events.md#a-real-one) — the first two blocks are identical.
 Only the kind, the signer and the last block differ.
 
 Note the two `a` tags. They're told apart by their marker and their kind
@@ -111,11 +112,11 @@ event, and there isn't one — the `p` tags on a schema are extra *suggesters* f
 a closed or private list, not curators.
 
 Curation is inert until the schema is published: with no `schema.namespace`
-there is no curator, and `verifyCuration` rejects everything.
+there is no curator, and `verifyCuratedCanonical` rejects everything.
 
 ## Verification
 
-`verifyCuration(event, schema, { pubkey })` is `verifySuggestion` plus:
+`verifyCuratedCanonical(event, schema, { pubkey })` is `verifyCuratedSuggestion` plus:
 
 | check | example violation |
 |---|---|
@@ -124,7 +125,7 @@ there is no curator, and `verifyCuration` rejects everything.
 | signed by that author | `Only the pubkey that published the schema may curate.` |
 | any source reference is well formed | `"31888:nothex:x" is not a valid suggestion coordinate.` |
 
-Everything from the [suggestion rules](suggestion-events.md#verification) still
+Everything from the [suggestion rules](curated-suggestion-events.md#verification) still
 applies: required fields, types, `require-any`, the reply root.
 
 ## In the app
@@ -136,7 +137,7 @@ rather than a firehose. Everything anyone has suggested stays readable at
 
 ```ts
 // lib/util/dedup.ts
-export function curatedFilms(videos: Video[]): FilmGroup[] {
+export function canonicalFilms(videos: Video[]): FilmGroup[] {
   return groupFilms(videos).filter((group) => group.primary.curated)
 }
 ```
@@ -162,10 +163,10 @@ promotes an entry, it doesn't hide the rest.
 The store subscribes to curated events separately, scoped to the curator:
 
 ```js
-{ kinds: [31890], authors: [curator], "#a": [schemaAddress] }
+{ kinds: [31890], authors: [curator], "#a": [curatedSchemaAddress] }
 ```
 
-That filter only runs once `SCHEMA_NAMESPACE` is set. Until it is, the app reads
+That filter only runs once `CURATED_SCHEMA_NAMESPACE` is set. Until it is, the app reads
 no curated events at all — which now leaves the home page empty, since that is
 all it lists. Setting it is part of publishing a schema, not an optional extra.
 

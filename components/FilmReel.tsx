@@ -162,7 +162,11 @@ export function FilmReel() {
                 : `No ${typeLabel(type as VideoType)} entries yet.`}
             </p>
           ) : (
-            <div className="flex gap-3 w-max px-4 sm:px-6 py-3">
+            // `w-max` lets the track outgrow the viewport and scroll;
+            // `min-w-full` + `justify-center` centres it when it doesn't.
+            // justify only distributes *free* space, and a max-content track
+            // has none, so an overflowing reel still starts at the left.
+            <div className="flex gap-3 w-max min-w-full justify-center px-4 sm:px-6 py-3">
               {reel.map((group) => (
                 <FilmFrame
                   key={group.key}

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { curatedFilms, type FilmGroup } from '@/lib/util/dedup'
 import { VideoGrid } from './VideoGrid'
-import { FilterBar, type SortMode, type TypeFilter } from './FilterBar'
+import { FilterBar, DEFAULT_TYPE, type SortMode, type TypeFilter } from './FilterBar'
 
 function matchesSearch(group: FilmGroup, q: string): boolean {
   if (!q) return true
@@ -23,11 +23,13 @@ function matchesSearch(group: FilmGroup, q: string): boolean {
 export function VideoBrowser() {
   const { videos, loading } = useVideos()
   const [search, setSearch] = useState('')
-  const [type, setType] = useState<TypeFilter>('all')
+  const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
   const [sort, setSort] = useState<SortMode>('recent')
 
+  const curated = useMemo(() => curatedFilms(videos), [videos])
+
   const groups = useMemo(() => {
-    let result = curatedFilms(videos)
+    let result = curated
 
     if (type !== 'all') {
       result = result.filter((g) => g.entries.some((v) => v.type === type))
@@ -42,7 +44,7 @@ export function VideoBrowser() {
     }
     // 'recent' is the store's native order (newest representative first).
     return result
-  }, [videos, type, search, sort])
+  }, [curated, type, search, sort])
 
   return (
     <div>
@@ -59,7 +61,7 @@ export function VideoBrowser() {
       {loading && videos.length === 0 ? (
         <LoadingState />
       ) : groups.length === 0 ? (
-        <EmptyState hasAny={groups.length > 0 || search.trim() !== '' || type !== 'all'} />
+        <EmptyState hasAny={curated.length > 0} />
       ) : (
         <VideoGrid groups={groups} />
       )}
@@ -87,9 +89,11 @@ function LoadingState() {
 }
 
 /**
- * `filtered` distinguishes "your search matched nothing" from "nothing has been
- * curated yet" — very different situations, and the second one has somewhere
- * useful to send you.
+ * `filtered` is "there are curated films, just none matching what you picked" —
+ * as opposed to nothing having been curated at all. Very different situations,
+ * and the second one has somewhere useful to send you. It's based on whether
+ * anything is curated, not on the filter's value, because the page no longer
+ * opens on "All".
  */
 function EmptyState({ hasAny: filtered }: { hasAny: boolean }) {
   return (

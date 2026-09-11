@@ -4,6 +4,12 @@ import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
 import { typeLabel } from '@/lib/util/format'
 
 export type TypeFilter = VideoType | 'all'
+
+/**
+ * The category the home page opens on. Movies are the marquee — the reel and
+ * the grid both start there, and "All" is one click away.
+ */
+export const DEFAULT_TYPE: TypeFilter = 'movie'
 export type SortMode = 'recent' | 'title'
 
 const FILTERS: TypeFilter[] = ['all', ...VIDEO_TYPES]

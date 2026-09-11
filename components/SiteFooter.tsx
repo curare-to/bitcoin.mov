@@ -19,6 +19,20 @@ export function SiteFooter() {
           </Link>
         </div>
       </div>
+
+      <div className="border-t border-[var(--color-border)]">
+        <p className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-center font-condensed uppercase tracking-widest text-base text-[var(--color-muted)]">
+          Powered by{' '}
+          <a
+            href="https://curare.to"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--color-btc)] font-semibold hover:underline underline-offset-4"
+          >
+            curare.to
+          </a>
+        </p>
+      </div>
     </footer>
   )
 }

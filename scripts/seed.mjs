@@ -1,141 +1,55 @@
 /**
- * Seed script — publishes the curated batch in data/seed-films.json as
- * kind 31888 events, signed by YOUR key.
+ * Seed — run the three seeding steps in order.
  *
- * Events are built and checked with the SAME module the app uses
- * (lib/nostr/schemaEvent.ts, imported directly — Node 22 strips the types), so
- * the seed batch cannot drift away from the published schema. Every film is
- * verified against the schema before anything is signed; a single violation
- * aborts the run.
+ * The list is three kinds of event by three kinds of author, so seeding it
+ * convincingly takes three steps:
  *
- * This script deliberately does NOT hardcode any key: it reads your nsec from
- * the NOSTR_NSEC environment variable so the secret never lives in a file or
- * in this repo.
+ *   1. seed:schema       kind 31889, signed by YOUR key — the schema and the
+ *                        list's identity. Your pubkey becomes the curator.
+ *   2. seed:suggestions  kind 31888, signed by a cast of generated throwaway
+ *                        keys — the crowd suggesting titles in reply to it.
+ *   3. seed:curated      kind 31890, signed by YOUR key — the ones you sign off
+ *                        on, referencing the suggestions they came from.
  *
- *   # 1. Verify + see exactly what would be published (no key, no network):
- *   npm run seed:dry
+ * Each step also runs on its own; this just chains them and stops at the first
+ * failure. Steps 1 and 3 need NOSTR_NSEC — step 2 signs as other people.
  *
- *   # 2. Publish for real, signing with your own key:
+ *   npm run seed:dry                  # preview all three, nothing signed
  *   NOSTR_NSEC=nsec1... npm run seed
  *
- * Because kind 31888 is addressable, re-running replaces your own prior
- * versions (same author + d) instead of creating duplicates — safe to re-run.
+ * Every step is idempotent: all three kinds are addressable and the generated
+ * authors are derived from a fixed salt, so re-running replaces rather than
+ * duplicates.
  */
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
-import { SimplePool } from 'nostr-tools/pool'
-import * as nip19 from 'nostr-tools/nip19'
-import {
-  DEFAULT_SCHEMA,
-  buildSuggestionTemplate,
-  verifySuggestion,
-} from '../lib/nostr/schemaEvent.ts'
-
-const WRITE_RELAYS = ['ws://localhost:10547']
 
 const here = dirname(fileURLToPath(import.meta.url))
-const dryRun = process.argv.includes('--dry-run')
+const args = process.argv.slice(2)
 
-/** Build every film, and report any that don't match the schema. */
-function buildAll(films, now, pubkey) {
-  const templates = []
-  const failures = []
+const STEPS = [
+  ['1/3  schema', 'schema.mjs'],
+  ['2/3  suggestions', 'seed-suggestions.mjs'],
+  ['3/3  curated', 'seed-curated.mjs'],
+]
 
-  films.forEach((film, i) => {
-    // Stagger timestamps so the list order is preserved (first entry = newest).
-    const template = buildSuggestionTemplate(film, DEFAULT_SCHEMA, {
-      createdAt: now - i,
-    })
-    const { ok, violations } = verifySuggestion(template, DEFAULT_SCHEMA, {
-      pubkey,
-    })
-    if (ok) templates.push(template)
-    else failures.push({ index: i, title: film.title ?? '(untitled)', violations })
-  })
-
-  return { templates, failures }
-}
-
-async function main() {
-  const raw = await readFile(join(here, '..', 'data', 'seed-films.json'), 'utf8')
-  const films = JSON.parse(raw)
-  const now = Math.floor(Date.now() / 1000)
-
-  const nsec = process.env.NOSTR_NSEC
-  let sk = null
-  let pubkey
-
-  if (!dryRun) {
-    if (!nsec) {
-      console.error(
-        'Missing NOSTR_NSEC. Run:\n  NOSTR_NSEC=nsec1... npm run seed\n' +
-          'Or preview first with:  npm run seed:dry',
-      )
-      process.exit(1)
-    }
-    try {
-      const decoded = nip19.decode(nsec.trim())
-      if (decoded.type !== 'nsec') throw new Error('not an nsec')
-      sk = decoded.data
-    } catch {
-      console.error('NOSTR_NSEC is not a valid nsec1… key.')
-      process.exit(1)
-    }
-    pubkey = getPublicKey(sk)
-  }
-
-  const { templates, failures } = buildAll(films, now, pubkey)
-
-  if (failures.length > 0) {
-    console.error(
-      `${failures.length}/${films.length} films do not match schema ` +
-        `"${DEFAULT_SCHEMA.identifier}":\n`,
-    )
-    for (const f of failures) {
-      console.error(`  ✗ [${f.index}] ${f.title}`)
-      for (const v of f.violations) console.error(`      ${v.field}: ${v.message}`)
-    }
-    console.error('\nFix data/seed-films.json (or the schema) and re-run.')
-    process.exit(1)
-  }
-
-  console.log(
-    `✓ ${templates.length}/${films.length} films match schema ` +
-      `"${DEFAULT_SCHEMA.identifier}" (${DEFAULT_SCHEMA.visibility}).`,
+for (const [label, script] of STEPS) {
+  console.log(`\n${'─'.repeat(60)}\n${label}\n${'─'.repeat(60)}`)
+  const result = spawnSync(
+    process.execPath,
+    ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', join(here, script), ...args],
+    { stdio: 'inherit' },
   )
-
-  if (dryRun) {
-    console.log(`\nDRY RUN — ${templates.length} kind ${DEFAULT_SCHEMA.kind} events:\n`)
-    for (const t of templates) console.log(JSON.stringify(t))
-    console.log('\nNo key used, nothing published. Re-run without --dry-run to publish.')
-    return
+  if (result.status !== 0) {
+    console.error(`\nStopped: ${script} exited with ${result.status}.`)
+    process.exit(result.status ?? 1)
   }
-
-  console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
-  console.log(`Publishing ${templates.length} films to ${WRITE_RELAYS.length} relays…\n`)
-
-  const pool = new SimplePool()
-  let ok = 0
-  for (const template of templates) {
-    const event = finalizeEvent(template, sk)
-    const results = await Promise.allSettled(pool.publish([...WRITE_RELAYS], event))
-    const accepted = results.filter((r) => r.status === 'fulfilled').length
-    const title = template.tags.find((t) => t[0] === 'title')?.[1] ?? '(untitled)'
-    if (accepted > 0) ok += 1
-    console.log(
-      `${accepted > 0 ? '✓' : '✗'} ${title} — ${accepted}/${WRITE_RELAYS.length} relays`,
-    )
-  }
-
-  console.log(`\nDone: ${ok}/${templates.length} films published.`)
-  pool.close([...WRITE_RELAYS])
-  // Sockets can keep the event loop alive; exit explicitly.
-  setTimeout(() => process.exit(0), 500)
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+console.log(
+  `\n${'─'.repeat(60)}\n` +
+    (args.includes('--dry-run')
+      ? 'Previewed. Nothing was signed or published.'
+      : 'Seeded. Check it with:  npm run verify'),
+)

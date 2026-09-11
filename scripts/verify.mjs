@@ -6,20 +6,19 @@
  * rejected, not repaired) and why anything is being dropped.
  *
  *   npm run verify
- *   npm run verify -- ws://relay.example.com
+ *   npm run verify -- --relay=ws://relay.example.com
  */
 import { SimplePool } from 'nostr-tools/pool'
 import {
+  CURATION_KIND,
   DEFAULT_SCHEMA,
   SCHEMA_KIND,
-  parseSchemaEvent,
   schemaAddress,
   schemaDisplayName,
+  verifyCuration,
   verifySuggestion,
 } from '../lib/nostr/schemaEvent.ts'
-
-const relays = process.argv.slice(2).filter((a) => a.startsWith('ws'))
-const READ_RELAYS = relays.length > 0 ? relays : ['ws://localhost:10547']
+import { RELAYS as READ_RELAYS, done, loadSchema } from './lib.mjs'
 
 async function main() {
   const pool = new SimplePool()
@@ -27,51 +26,57 @@ async function main() {
 
   // A schema published to the relay wins over the bundled one — that is the
   // whole point of putting it on Nostr. Fall back when there isn't one.
-  const schemaEvents = await pool.querySync(READ_RELAYS, {
-    kinds: [SCHEMA_KIND],
-    limit: 50,
-  })
-  const published = schemaEvents
-    .map(parseSchemaEvent)
-    .filter((s) => s !== null && s.identifier === DEFAULT_SCHEMA.identifier)
-    .sort((a, b) => (b.source?.createdAt ?? 0) - (a.source?.createdAt ?? 0))[0]
-
-  const schema = published ?? DEFAULT_SCHEMA
+  const { schema, published } = await loadSchema(pool, READ_RELAYS)
   console.log(
     published
-      ? `Using published schema ${schemaAddress(published)}`
+      ? `Using published schema ${schemaAddress(schema)}`
       : `No kind ${SCHEMA_KIND} schema on the relay — using the bundled one ` +
-          `("${DEFAULT_SCHEMA.identifier}"). Publish it with: npm run schema`,
+          `("${DEFAULT_SCHEMA.identifier}"). Publish it with: npm run seed:schema`,
   )
   console.log(
     `  ${schemaDisplayName(schema)} — ${schema.description}\n` +
       `  kind ${schema.kind}, visibility: ${schema.visibility}\n`,
   )
 
-  const events = await pool.querySync(READ_RELAYS, {
-    kinds: [schema.kind],
-    limit: 1000,
-  })
+  // Both halves of the list: what people suggested, and what the curator
+  // signed off on. Curated entries answer to the same schema plus two rules.
+  const [suggestions, curations] = await Promise.all([
+    pool.querySync(READ_RELAYS, { kinds: [schema.kind], limit: 1000 }),
+    schema.namespace
+      ? pool.querySync(READ_RELAYS, {
+          kinds: [CURATION_KIND],
+          authors: [schema.namespace],
+          limit: 1000,
+        })
+      : Promise.resolve([]),
+  ])
 
   let ok = 0
   const rejected = []
   const reasons = new Map()
 
-  for (const event of events) {
-    const result = verifySuggestion(event, schema)
+  const check = (event, verify, label) => {
+    const result = verify(event, schema)
     if (result.ok) {
       ok += 1
-      continue
+      return
     }
     const title = event.tags.find((t) => t[0] === 'title')?.[1] ?? '(no title)'
-    rejected.push({ title, id: event.id, violations: result.violations })
+    rejected.push({ title: `${title} [${label}]`, id: event.id, violations: result.violations })
     for (const v of result.violations) {
       const key = `${v.field}: ${v.message}`
       reasons.set(key, (reasons.get(key) ?? 0) + 1)
     }
   }
 
-  console.log(`${events.length} entries: ${ok} verify, ${rejected.length} rejected.`)
+  for (const event of suggestions) check(event, verifySuggestion, 'suggestion')
+  for (const event of curations) check(event, verifyCuration, 'curated')
+
+  const total = suggestions.length + curations.length
+  console.log(
+    `${total} entries (${suggestions.length} suggested, ${curations.length} curated): ` +
+      `${ok} verify, ${rejected.length} rejected.`,
+  )
 
   if (rejected.length > 0) {
     console.log('\nRejected:')
@@ -95,8 +100,7 @@ async function main() {
     }
   }
 
-  pool.close(READ_RELAYS)
-  setTimeout(() => process.exit(rejected.length > 0 ? 1 : 0), 300)
+  done(pool, rejected.length > 0 ? 1 : 0, READ_RELAYS)
 }
 
 main().catch((err) => {

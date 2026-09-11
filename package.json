@@ -9,12 +9,15 @@
     "start": "next start",
     "lint": "next lint",
     "serve": "npx serve out",
-    "seed:dry": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed.mjs --dry-run",
     "seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed.mjs",
-    "schema:dry": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs --dry-run",
+    "seed:dry": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed.mjs --dry-run",
+    "seed:schema": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs",
+    "seed:suggestions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed-suggestions.mjs",
+    "seed:curated": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed-curated.mjs",
     "schema": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs",
-    "verify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify.mjs",
-    "curate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/curate.mjs"
+    "schema:dry": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/schema.mjs --dry-run",
+    "curate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/curate.mjs",
+    "verify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify.mjs"
   },
   "dependencies": {
     "next": "^15.1.0",

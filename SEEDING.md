@@ -1,127 +1,130 @@
-# Seeding the initial batch
+# Seeding
 
-A curated batch of 37 Bitcoin films — documentaries, feature films, shorts and
-series (2011–2024) — lives in
-[`data/seed-films.json`](data/seed-films.json). The publish script signs each
-one as a kind 31888 event **with your own key** and pushes it to the write
-relays. Nothing is published until you run it — and the script never stores or
-sees your key beyond the environment variable you pass it.
+The list is three kinds of event signed by three kinds of author, so seeding it
+convincingly takes three steps:
 
-Every film is checked against the kind 31889 schema before anything is signed,
-and a single violation aborts the run — so the batch can't drift away from what
-the app will accept.
+| step | kind | signed by |
+|---|---|---|
+| `npm run seed:schema` | 31889 schema | **your** key |
+| `npm run seed:suggestions` | 31888 suggestions | a cast of generated throwaway keys |
+| `npm run seed:curated` | 31890 curated entries | **your** key |
 
-## 1. Preview (no key, no network)
+`npm run seed` runs all three in order and stops at the first failure. Steps 1
+and 3 need `NOSTR_NSEC`; step 2 signs as other people and needs no key of yours.
+
+The films come from [`data/seed-films.json`](data/seed-films.json) — a curated
+batch of 37 Bitcoin documentaries, features, shorts and series (2011–2024).
+
+## Preview first
 
 ```bash
 npm run seed:dry
 ```
 
-This verifies all 37 films against the schema, then prints the exact events that
-would be published:
+No key, no network, nothing signed. It prints the schema, then every suggestion
+with the pubkey that would sign it. Step 3 needs suggestions on a relay to
+preview against, so on an empty relay it says so and stops there rather than
+failing.
 
-```
-✓ 37/37 films match schema "bitcoin.mov" (public).
-```
-
-Review titles, links and tags before going live. If a film doesn't match, you
-get the field and the reason:
-
-```
-  ✗ [21] The Good Wife: Bitcoin for Dummies
-      watchUrl: Provide at least one of: Watch / reference URL, IMDb URL.
-```
-
-## 2. Publish for real
+## Run it
 
 You need a Nostr secret key in `nsec1…` form. Use a **dedicated key** for the
-curator identity if you don't want these attributed to your personal one — any
-Nostr client (Alby, nos2x, Amethyst…) can generate one, or your existing key
-works fine.
+curator identity if you don't want the list attributed to your personal one —
+any Nostr client (Alby, nos2x, Amethyst…) can generate one.
 
 ```bash
 NOSTR_NSEC=nsec1yourkeyhere npm run seed
 ```
 
-You'll see the signing `npub` and a per-film relay result:
+Pass the key inline so it isn't written to disk or shell history. The scripts
+never store it or see it beyond the environment variable.
 
-```
-Signing as npub1…
-✓ The Rise and Rise of Bitcoin — 4/4 relays
-✓ Banking on Bitcoin — 3/4 relays
-…
-```
-
-Pass the key inline (as above) so it isn't written to disk or shell history —
-or `export NOSTR_NSEC=…` in a subshell you then close.
-
-## 3. Verify
-
-Open the app (`npm run dev`) — the 37 films appear in the reel and grid within a
-few seconds. Because kind 31888 is **addressable**, the script is safe to
-re-run: republishing replaces your own prior versions (same author + `d` tag)
-rather than creating duplicates. That also means you can edit
-`data/seed-films.json` and re-run to update entries.
-
-## Posters
-
-Each entry ships with a verified poster/thumbnail `"image"` (https): portrait
-posters from Wikipedia/TMDB where available, otherwise the film's YouTube
-thumbnail. Every URL was checked to load a real image. To swap one, edit the
-entry's `"image"` in `data/seed-films.json` and re-run — or edit in-app via
-*Edit this entry*. If a URL ever breaks, the card falls back to the ₿
-placeholder automatically.
-
-## Publish the schema too
-
-The entries describe films; the **schema event** describes the entries. Publish
-it once so other clients can render the same suggestion form:
+Aim a run at a scratch relay with `--relay=`:
 
 ```bash
-npm run schema:dry                       # preview the schema and its event
-NOSTR_NSEC=nsec1yourkeyhere npm run schema
+npm run seed:suggestions -- --relay=ws://localhost:7777
 ```
 
-The schema carries the list's identity — a required `name`, `description` and
-`visibility`, plus an optional picture and domain:
+## The steps
+
+### 1. Schema — `npm run seed:schema`
+
+Publishes the kind 31889 schema. **Your pubkey becomes the curator**: the
+coordinate `31889:<your pubkey>:bitcoin.mov` is what everything else replies to,
+and only that key may curate.
+
+Same script as `npm run schema`, which also takes the identity flags
+(`--name=`, `--domain=`, `--picture=`) — see the README.
+
+### 2. Suggestions — `npm run seed:suggestions`
+
+Publishes the 37 films as kind 31888 suggestions in reply to the schema, spread
+across a cast of generated authors, with a few films suggested twice by
+different people so the duplicate-collapsing and *+N more suggestions* paths
+have something to show.
 
 ```bash
-npm run schema:dry -- --name="Bitcoin on screen" \
-  --picture=https://example.com/logo.png --domain=example.com
+npm run seed:suggestions -- --authors=20 --duplicates=8 --salt=take-two
 ```
 
-A **domain replaces the name** wherever the list is shown, and nothing verifies
-it for you, so only pass `--domain` for one you control and can serve
-`/.well-known/nostr.json` from.
+The keys are derived from `--salt` rather than random, so re-running replaces
+the same events instead of leaving another 37 behind. They're throwaway dev
+identities and the secrets are never written anywhere — which also means nobody
+can edit these suggestions afterwards. A different `--salt` gives a different
+cast.
 
-Then check what a relay actually holds:
+This step reads the schema off the relay, so run step 1 first.
+
+### 3. Curated — `npm run seed:curated`
+
+Signs off on some of those suggestions as kind 31890 curated entries, using your
+key. It curates 12 by default rather than everything: a list where nothing is
+pending shows none of the interesting states.
+
+```bash
+NOSTR_NSEC=nsec1... npm run seed:curated -- --count=20
+NOSTR_NSEC=nsec1... npm run seed:curated -- --all
+```
+
+The picks are stable (sorted by `d`), and curated entries keep the suggestion's
+`d`, so re-running revises them rather than piling up duplicates. The script
+refuses to sign with a key that isn't the schema's author.
+
+## Verify
 
 ```bash
 npm run verify
 ```
 
-## Curating
+Read-only. Checks every suggestion *and* every curated entry on the relay
+against the published schema, and says why anything is being rejected. Then open
+the app (`npm run dev`) — curated entries are marked, and represent their film
+wherever a title was suggested more than once.
 
-Once the schema is published, the pubkey that published it can sign off on what
-others have suggested:
+## Curating for real
+
+`npm run seed:curated` is the bulk version. The actual editorial workflow is:
 
 ```bash
-npm run curate                                     # what's suggested, what's pending
-NOSTR_NSEC=nsec1yourkeyhere npm run curate -- --all # curate everything pending
+npm run curate                                   # what's suggested, what's pending
+NOSTR_NSEC=nsec1... npm run curate -- --id=<event id>
 ```
-
-Curated entries are kind 31890, keep the suggestion's `d`, and carry the same
-fields — so re-curating revises an entry rather than duplicating it. The script
-refuses to curate anything that doesn't satisfy the schema, and refuses to sign
-with a key that isn't the schema's author.
 
 ## Notes
 
-- The seed script imports
+- Every step is idempotent. All three kinds are addressable, and the generated
+  authors are derived from a fixed salt, so re-running replaces rather than
+  duplicates. That also means you can edit `data/seed-films.json` and re-run.
+- The scripts import
   [`lib/nostr/schemaEvent.ts`](lib/nostr/schemaEvent.ts) directly (Node 22
-  strips the types), so it builds and verifies events with the *same* code the
-  browser runs. There is no second copy to keep in sync — change the schema and
-  `npm run seed:dry` tells you immediately if the batch no longer matches.
-- Metadata (titles, years, directors, IMDb ids, watch links) was drawn from
-  IMDb and Jameson Lopp's Bitcoin documentaries list. Double-check anything you
+  strips the types), so they build and verify events with the *same* code the
+  browser runs. There is no second copy to keep in sync.
+- Curation only lights up in the app once `SCHEMA_NAMESPACE` in
+  `lib/nostr/schemaEvent.ts` is set to the curator's pubkey — step 1 prints it.
+  Until then the app reads suggestions but not curated entries.
+- Each entry ships with a verified poster `"image"` (https): portrait posters
+  from Wikipedia/TMDB where available, otherwise the film's YouTube thumbnail.
+  If a URL breaks, the card falls back to the ₿ placeholder automatically.
+- Metadata (titles, years, directors, IMDb ids, watch links) was drawn from IMDb
+  and Jameson Lopp's Bitcoin documentaries list. Double-check anything you
   intend to present as authoritative.

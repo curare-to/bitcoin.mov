@@ -134,7 +134,7 @@ same form without shipping this repo's code.
 
 ```bash
 npm run schema:dry   # print the schema and the event it produces
-npm run schema       # NOSTR_NSEC=nsec1… — publish it
+npm run schema       # NOSTR_NSEC=nsec1… — publish it (= npm run seed:schema)
 npm run verify       # check a relay's entries against it
 ```
 
@@ -266,15 +266,18 @@ NOSTR_NSEC=nsec1... npm run curate -- --id=<id>  # curate one
 NOSTR_NSEC=nsec1... npm run curate -- --all      # everything pending
 ```
 
+For bulk seeding rather than editorial work, `npm run seed:curated` curates a
+stable subset in one go — see [SEEDING.md](SEEDING.md).
+
 In the app, a curated entry outranks the newest suggestion as the representative
 of its film group, and is marked *Curated* with credit to the original
 suggester. Curation is inert until the schema is published — there's no curator
 until a pubkey has signed a schema event.
 
-> The 37 seeded films are currently published as **suggestions**, by the same
-> key that would publish the schema. Publishing them as curated entries instead
-> would be truer to the model; it's a re-seed, not a code change, and a call
-> worth making deliberately.
+Seeding exercises all three: `npm run seed` publishes the schema with your key,
+the 37 films as suggestions from a cast of generated throwaway keys, and a
+subset of those as curated entries back under your key. See
+[SEEDING.md](SEEDING.md).
 
 ## Notes
 
@@ -284,8 +287,9 @@ until a pubkey has signed a schema event.
   `created_at` across relays.
 - Relays read/written are configured in
   [`lib/nostr/relays.ts`](lib/nostr/relays.ts).
-- **Seeding:** see [SEEDING.md](SEEDING.md). `npm run seed:dry` verifies the
-  whole batch against the schema before anything is signed.
+- **Seeding:** see [SEEDING.md](SEEDING.md). `npm run seed:dry` previews all
+  three steps — schema, suggestions, curated entries — without signing
+  anything, and every step verifies against the schema before it publishes.
 - **Curating:** `npm run curate` lists what's been suggested and what's still
   pending. It refuses to curate a suggestion that doesn't satisfy the schema,
   and refuses to sign with a key that isn't the schema's author.

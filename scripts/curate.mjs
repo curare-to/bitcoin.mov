@@ -243,7 +243,7 @@ async function main() {
 }
 
 // Only run when invoked as a script, so planCuration stays importable.
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
+if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   main().catch((err) => {
     console.error(err)
     process.exit(1)

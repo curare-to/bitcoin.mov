@@ -14,7 +14,7 @@
  *   # See the schema and the event it produces (no key, no network):
  *   npm run schema:dry
  *
- *   # Publish it:
+ *   # Publish it (also runs as step 1 of `npm run seed`):
  *   NOSTR_NSEC=nsec1... npm run schema
  *
  *   # Restrict who may submit (default is public):

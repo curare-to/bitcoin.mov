@@ -55,6 +55,8 @@ power the schema author doesn't share.
 Full reference in **[docs/](docs/)** — every tag, the verification rules, and
 worked examples straight out of the seeded library:
 
+- **[docs/NIP.md](docs/NIP.md)** — the protocol as a Nostr Implementation
+  Possibility: the normative spec for all three kinds, in NIP form
 - **[docs/README.md](docs/README.md)** — how the three fit together, a
   walkthrough with real events, and the relay queries that fetch each one
 - **[docs/curated-schema-events.md](docs/curated-schema-events.md)** — kind 31889: field

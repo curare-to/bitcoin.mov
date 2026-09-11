@@ -3,6 +3,10 @@
 Three event kinds, three kinds of author. Everything else in this project is
 plumbing around them.
 
+The protocol itself is written up as a NIP in **[NIP.md](NIP.md)** — the
+normative version, in the form the Nostr NIPs repository uses. The pages below
+are the same material as a guided tour, with more of the *why*.
+
 | kind | | who signs it | detail |
 |---|---|---|---|
 | **31889** | **curated schema event** — what a suggestion may contain, and whose list this is | the curator | [curated-schema-events.md](curated-schema-events.md) |

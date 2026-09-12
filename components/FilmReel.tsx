@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { Poster } from './ui/Poster'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { canonicalFilms, type FilmGroup } from '@/lib/util/dedup'
-import { DEFAULT_TYPE } from './FilterBar'
+import { defaultType } from './FilterBar'
 import { typeLabel, timeAgo, isLandscapeThumb } from '@/lib/util/format'
 import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
 
@@ -28,9 +28,12 @@ type TypeFilter = VideoType | 'all'
 export function FilmReel() {
   const { videos } = useVideos()
   const [dir, setDir] = useState<'asc' | 'desc'>('asc')
-  const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
+  const [picked, setPicked] = useState<TypeFilter | null>(null)
 
   const allGroups = useMemo(() => canonicalFilms(videos), [videos])
+  // Same rule as the grid below: Movie until a chip is clicked, unless the
+  // list has no movies — then All, so the reel is never empty on arrival.
+  const type = picked ?? defaultType(allGroups)
 
   // Only offer chips for types that actually have films.
   const availableTypes = useMemo(() => {
@@ -125,22 +128,22 @@ export function FilmReel() {
           </button>
         </div>
 
-        {availableTypes.length > 1 && (
-          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-            <TypeChip active={type === 'all'} onClick={() => setType('all')}>
-              All
+        {/* Shown even when only one type has films: the active chip is how
+            the reel says which category it opened on. */}
+        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+          <TypeChip active={type === 'all'} onClick={() => setPicked('all')}>
+            All
+          </TypeChip>
+          {availableTypes.map((t) => (
+            <TypeChip
+              key={t}
+              active={type === t}
+              onClick={() => setPicked(t)}
+            >
+              {typeLabel(t)}
             </TypeChip>
-            {availableTypes.map((t) => (
-              <TypeChip
-                key={t}
-                active={type === t}
-                onClick={() => setType(t)}
-              >
-                {typeLabel(t)}
-              </TypeChip>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       <div className="relative">

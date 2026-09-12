@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useVideos } from '@/lib/nostr/useVideos'
 import { canonicalFilms, type FilmGroup } from '@/lib/util/dedup'
 import { VideoGrid } from './VideoGrid'
-import { FilterBar, DEFAULT_TYPE, type SortMode, type TypeFilter } from './FilterBar'
+import { FilterBar, defaultType, type SortMode, type TypeFilter } from './FilterBar'
 
 function matchesSearch(group: FilmGroup, q: string): boolean {
   if (!q) return true
@@ -23,10 +23,13 @@ function matchesSearch(group: FilmGroup, q: string): boolean {
 export function VideoBrowser() {
   const { videos, loading, schemaStatus } = useVideos()
   const [search, setSearch] = useState('')
-  const [type, setType] = useState<TypeFilter>(DEFAULT_TYPE)
+  const [picked, setPicked] = useState<TypeFilter | null>(null)
   const [sort, setSort] = useState<SortMode>('recent')
 
   const curated = useMemo(() => canonicalFilms(videos), [videos])
+  // Until a chip is clicked the category follows the list, so a list with no
+  // movies opens on All — derived rather than synced, as entries stream in.
+  const type = picked ?? defaultType(curated)
 
   const groups = useMemo(() => {
     let result = curated
@@ -52,7 +55,7 @@ export function VideoBrowser() {
         search={search}
         onSearch={setSearch}
         type={type}
-        onType={setType}
+        onType={setPicked}
         sort={sort}
         onSort={setSort}
         count={groups.length}

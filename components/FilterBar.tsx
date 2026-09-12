@@ -1,16 +1,23 @@
 'use client'
 
 import { VIDEO_TYPES, type VideoType } from '@/lib/nostr/schema'
+import type { FilmGroup } from '@/lib/util/dedup'
 import { typeLabel } from '@/lib/util/format'
 
 export type TypeFilter = VideoType | 'all'
+export type SortMode = 'recent' | 'title'
 
 /**
  * The category the home page opens on. Movies are the marquee — the reel and
- * the grid both start there, and "All" is one click away.
+ * the grid both start there, and "All" is one click away. A marquee with
+ * nothing on it is no welcome, though: a list curated without a single movie
+ * opens on "All" instead. Before anything has loaded there is nothing to show
+ * either way, so the chip stays on Movie rather than jumping.
  */
-export const DEFAULT_TYPE: TypeFilter = 'movie'
-export type SortMode = 'recent' | 'title'
+export function defaultType(groups: FilmGroup[]): TypeFilter {
+  const hasMovie = groups.some((g) => g.entries.some((v) => v.type === 'movie'))
+  return hasMovie || groups.length === 0 ? 'movie' : 'all'
+}
 
 const FILTERS: TypeFilter[] = ['all', ...VIDEO_TYPES]
 

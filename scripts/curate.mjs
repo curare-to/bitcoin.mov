@@ -16,11 +16,14 @@
  *   NOSTR_NSEC=nsec1... npm run curate -- --id=<suggestion event id>
  *   NOSTR_NSEC=nsec1... npm run curate -- --all
  *
+ *   # Sign elsewhere: only the npub, and the unsigned events go to stdout.
+ *   NOSTR_NPUB=npub1... npm run --silent curate -- --all > canonical.jsonl
+ *
  * Curating is editorial, not mechanical — `--all` is there for bootstrapping,
  * not as the normal path. Curated entries are addressable and keep the
  * suggestion's `d`, so re-curating revises an entry rather than duplicating it.
  */
-import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
+import { finalizeEvent } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
 import {
@@ -36,7 +39,7 @@ import {
   verifyCuratedCanonical,
   verifyCuratedSuggestion,
 } from '../lib/nostr/curatedSchemaEvent.ts'
-import { RELAYS, publish } from './lib.mjs'
+import { RELAYS, emitUnsigned, publish, readSigner, requireRelays, say } from './lib.mjs'
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -92,6 +95,7 @@ export function planCuration(suggestions, curations, schema) {
 
 async function main() {
   const pool = new SimplePool()
+  await requireRelays(pool)
   const schema = await loadSchema(pool)
   const address = curatedSchemaAddress(schema)
 
@@ -104,8 +108,8 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`Curating for ${curatedSchemaDisplayName(schema)}  (${address})`)
-  console.log(`  curator: ${short(schema.namespace)}\n`)
+  say(`Curating for ${curatedSchemaDisplayName(schema)}  (${address})`)
+  say(`  curator: ${short(schema.namespace)}\n`)
 
   const [suggestions, curations] = await Promise.all([
     pool.querySync(RELAYS, { kinds: [schema.kind], '#a': [address], limit: 1000 }),
@@ -120,16 +124,16 @@ async function main() {
 
   for (const row of rows) {
     const mark = row.done ? '✓ curated' : row.valid.ok ? '· pending' : '✗ invalid'
-    console.log(
+    say(
       `  ${mark}  ${row.title.slice(0, 44).padEnd(46)}${short(row.event.pubkey)}  ${row.event.id.slice(0, 12)}…`,
     )
     if (!row.valid.ok) {
-      for (const v of row.valid.violations) console.log(`               ${v.field}: ${v.message}`)
+      for (const v of row.valid.violations) say(`               ${v.field}: ${v.message}`)
     }
   }
 
   const pending = rows.filter((r) => !r.done && r.valid.ok)
-  console.log(
+  say(
     `\n${rows.filter((r) => r.done).length} curated, ${pending.length} pending` +
       `, ${rows.filter((r) => !r.valid.ok).length} invalid.`,
   )
@@ -152,7 +156,7 @@ async function main() {
       picked.push(row)
     }
   } else {
-    console.log(
+    say(
       '\nCurate one with:  npm run curate -- --id=<event id>\n' +
         'or everything pending with:  npm run curate -- --all',
     )
@@ -162,7 +166,7 @@ async function main() {
   }
 
   if (picked.length === 0) {
-    console.log('\nNothing to curate.')
+    say('\nNothing to curate.')
     pool.close(RELAYS)
     setTimeout(() => process.exit(0), 300)
     return
@@ -180,34 +184,15 @@ async function main() {
   }))
 
   if (dryRun) {
-    console.log(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
+    say(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
     for (const { template } of templates) console.log(JSON.stringify(template))
-    console.log('\nNo key used, nothing published.')
+    say('\nNo key used, nothing published.')
     pool.close(RELAYS)
     setTimeout(() => process.exit(0), 300)
     return
   }
 
-  const nsec = process.env.NOSTR_NSEC
-  if (!nsec) {
-    console.error(
-      '\nMissing NOSTR_NSEC. Run:\n  NOSTR_NSEC=nsec1... npm run curate -- --all\n' +
-        'Or preview first with:  npm run curate -- --all --dry-run',
-    )
-    process.exit(1)
-  }
-
-  let sk
-  try {
-    const decoded = nip19.decode(nsec.trim())
-    if (decoded.type !== 'nsec') throw new Error('not an nsec')
-    sk = decoded.data
-  } catch {
-    console.error('NOSTR_NSEC is not a valid nsec1… key.')
-    process.exit(1)
-  }
-
-  const pubkey = getPublicKey(sk)
+  const { pubkey, sk, canSign } = readSigner('npm run curate -- --all')
   if (pubkey !== schema.namespace) {
     console.error(
       `\nThat key is ${short(pubkey)}, but this schema was published by ` +
@@ -216,25 +201,43 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
-  console.log(`Publishing ${templates.length} curated entries…\n`)
+  if (!canSign) {
+    say(`\nUnsigned kind ${CURATED_CANONICAL_KIND} events for ${nip19.npubEncode(pubkey)} → stdout\n`)
+    let emitted = 0
+    for (const { row, template } of templates) {
+      const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
+      if (!check.ok) {
+        say(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
+        continue
+      }
+      emitUnsigned(template, pubkey)
+      emitted += 1
+    }
+    say(`\n${emitted} unsigned events. Sign and publish them yourself. Nothing was published.`)
+    pool.close(RELAYS)
+    setTimeout(() => process.exit(0), 300)
+    return
+  }
+
+  say(`\nSigning as ${nip19.npubEncode(pubkey)}`)
+  say(`Publishing ${templates.length} curated entries…\n`)
 
   let ok = 0
   for (const { row, template } of templates) {
     const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
     if (!check.ok) {
-      console.log(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
+      say(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
       continue
     }
     const event = finalizeEvent(template, sk)
     const accepted = await publish(pool, event)
     if (accepted > 0) ok += 1
-    console.log(
+    say(
       `${accepted > 0 ? '✓' : '✗'} ${row.title} — ${accepted}/${RELAYS.length} relays`,
     )
   }
 
-  console.log(`\nDone: ${ok}/${templates.length} curated.`)
+  say(`\nDone: ${ok}/${templates.length} curated.`)
   pool.close(RELAYS)
   setTimeout(() => process.exit(0), 500)
 }

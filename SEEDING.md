@@ -39,6 +39,36 @@ NOSTR_NSEC=nsec1yourkeyhere npm run seed
 Pass the key inline so it isn't written to disk or shell history. The scripts
 never store it or see it beyond the environment variable.
 
+### Or keep the key out of it entirely
+
+Give only the public key and the scripts never sign anything. Every step that
+would have signed prints its events **unsigned** to stdout instead — one JSON
+object per line, `pubkey` filled in so your signer can check whom it's signing
+for — and everything else it says goes to stderr, so a redirect captures
+exactly the events you need to sign:
+
+```bash
+NOSTR_NPUB=npub1yourkey npm run --silent seed:schema  > schema.json
+NOSTR_NPUB=npub1yourkey npm run --silent seed:curated > canonical.jsonl
+```
+
+Sign them however you sign things — a hardware device, a bunker, `nak` — and
+publish them yourself. Save the signed schema event, as is, to
+`public/.well-known/curare.to/nostr.json`; that file is just the signed event.
+
+Step 2 doesn't need your key either way (its authors are generated), but it
+needs to know who the curator is to build reply tags before the schema is on
+a relay. `NOSTR_NPUB` covers that, so the whole chain works unsigned:
+
+```bash
+NOSTR_NPUB=npub1yourkey npm run --silent seed > to-sign.jsonl
+```
+
+publishes the suggestions and leaves you a file of schema + canonical events
+to sign. If both `NOSTR_NSEC` and `NOSTR_NPUB` are set, the npub must be the
+nsec's own or the script stops — a mismatch means someone is confused about
+which key this is.
+
 Aim a run at a scratch relay with `--relay=`:
 
 ```bash

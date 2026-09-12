@@ -80,26 +80,107 @@ export function tagValue(event, name) {
 }
 
 /**
- * Decode NOSTR_NSEC, or exit with instructions. `usage` is the command line to
- * suggest, so each script can point at itself.
+ * Unsigned mode: NOSTR_NPUB given and NOSTR_NSEC not.
+ *
+ * The scripts can build every event a curator needs from the pubkey alone —
+ * reply roots, `p` tags, coordinates — but signing takes the key, and there
+ * is no reason a seed script should hold it. With only the npub, each script
+ * that would have signed prints the unsigned events instead, one JSON object
+ * per line on stdout, with `pubkey` filled in so the signer can check whom
+ * it is signing for. Everything else it says goes to stderr, so
+ *
+ *   NOSTR_NPUB=npub1... npm run --silent seed:schema > schema.json
+ *
+ * captures nothing but the event. Sign it however you sign things — a
+ * hardware device, a bunker, `nak` — and publish it yourself.
  */
-export function readSecretKey(usage) {
+export const UNSIGNED = Boolean(process.env.NOSTR_NPUB) && !process.env.NOSTR_NSEC
+
+/** Narration. Off stdout in unsigned mode, so stdout is only events. */
+export const say = UNSIGNED ? console.error : console.log
+
+/** Print an unsigned event for external signing: stdout, one line, pubkey set. */
+export function emitUnsigned(template, pubkey) {
+  const { kind, created_at, tags, content } = template
+  console.log(JSON.stringify({ kind, created_at, tags, content, pubkey }))
+}
+
+/**
+ * Who is publishing, and whether we can sign for them.
+ *
+ *   NOSTR_NSEC  → { pubkey, sk, canSign: true }
+ *   NOSTR_NPUB  → { pubkey, sk: null, canSign: false }   (unsigned mode)
+ *   neither     → exits with instructions
+ *
+ * Both set: the nsec is used, and the npub must be its own — a mismatch means
+ * someone is confused about which key this is, which is worth stopping for.
+ */
+export function readSigner(usage) {
   const nsec = process.env.NOSTR_NSEC
-  if (!nsec) {
+  const npub = process.env.NOSTR_NPUB
+
+  if (!nsec && !npub) {
     console.error(
-      `\nMissing NOSTR_NSEC. Run:\n  NOSTR_NSEC=nsec1... ${usage}\n` +
+      `\nMissing NOSTR_NSEC. Run:\n  NOSTR_NSEC=nsec1... ${usage}\n\n` +
+        'Or, to sign elsewhere, give only the public key and the unsigned\n' +
+        'events are printed to stdout instead:\n' +
+        `  NOSTR_NPUB=npub1... ${usage} > events.jsonl\n\n` +
         'Or preview first by adding --dry-run.',
     )
     process.exit(1)
   }
+
+  let npubHex = null
+  if (npub) {
+    try {
+      const decoded = nip19.decode(npub.trim())
+      if (decoded.type !== 'npub') throw new Error('not an npub')
+      npubHex = decoded.data
+    } catch {
+      console.error('NOSTR_NPUB is not a valid npub1… key.')
+      process.exit(1)
+    }
+  }
+
+  if (!nsec) return { pubkey: npubHex, sk: null, canSign: false }
+
+  let sk
   try {
     const decoded = nip19.decode(nsec.trim())
     if (decoded.type !== 'nsec') throw new Error('not an nsec')
-    return decoded.data
+    sk = decoded.data
   } catch {
     console.error('NOSTR_NSEC is not a valid nsec1… key.')
     process.exit(1)
   }
+  const pubkey = getPublicKey(sk)
+  if (npubHex && npubHex !== pubkey) {
+    console.error(
+      `NOSTR_NPUB (${short(npubHex)}) is not the public key of NOSTR_NSEC ` +
+        `(${short(pubkey)}). Which key is this?`,
+    )
+    process.exit(1)
+  }
+  return { pubkey, sk, canSign: true }
+}
+
+/** The curator's pubkey from the environment alone, if either key is given. */
+export function curatorFromEnv() {
+  const nsec = process.env.NOSTR_NSEC
+  const npub = process.env.NOSTR_NPUB
+  try {
+    if (nsec) {
+      const d = nip19.decode(nsec.trim())
+      if (d.type === 'nsec') return getPublicKey(d.data)
+    }
+    if (npub) {
+      const d = nip19.decode(npub.trim())
+      if (d.type === 'npub') return d.data
+    }
+  } catch {
+    // reported properly by readSigner when it matters
+  }
+  return null
 }
 
 /**
@@ -135,10 +216,15 @@ const WELL_KNOWN = join(
  * pass a relay the app would show as empty. Null before the file exists.
  */
 export function wellKnownCurator() {
+  return wellKnownSchema()?.namespace ?? null
+}
+
+/** The schema in the well-known file, signature checked — or null. */
+export function wellKnownSchema() {
   try {
     const event = JSON.parse(readFileSync(WELL_KNOWN, 'utf8'))
     if (!event?.sig || !verifyEvent(event)) return null
-    return parseCuratedSchemaEvent(event) ? event.pubkey : null
+    return parseCuratedSchemaEvent(event)
   } catch {
     return null
   }
@@ -156,7 +242,12 @@ export function wellKnownCurator() {
  * Returns `{ schema, published, curator, others }`.
  */
 export async function loadSchema(pool, relays = RELAYS) {
-  const curator = wellKnownCurator()
+  // Who the site is committed to, in order of how much they've told us: the
+  // signed schema on disk says everything; a key in the environment says only
+  // who — enough to build against, since a coordinate needs only the pubkey.
+  const local = wellKnownSchema()
+  const curator = local?.namespace ?? curatorFromEnv()
+
   const events = await pool.querySync(relays, { kinds: [CURATED_SCHEMA_KIND], limit: 50 })
   const candidates = events
     .map(parseCuratedSchemaEvent)
@@ -167,15 +258,64 @@ export async function loadSchema(pool, relays = RELAYS) {
     ? candidates.find((s) => s.namespace === curator)
     : candidates[0]
   const others = [...new Set(
-    candidates.filter((s) => s.namespace !== published?.namespace).map((s) => s.namespace),
+    candidates.filter((s) => s.namespace !== (published ?? local)?.namespace).map((s) => s.namespace),
   )]
 
+  const schema =
+    published ??
+    local ??
+    (curator
+      ? { ...DEFAULT_CURATED_SCHEMA, namespace: curator, relays: [...WRITE_RELAYS] }
+      : DEFAULT_CURATED_SCHEMA)
+
   return {
-    schema: published ?? DEFAULT_CURATED_SCHEMA,
+    schema,
+    /** The relay has this curator's schema. */
     published: Boolean(published),
-    curator,
+    /** The schema came from disk or the environment, not (yet) the relay. */
+    assumed: !published && Boolean(schema.namespace),
+    curator: schema.namespace || null,
     others,
   }
+}
+
+/**
+ * Which relays can actually be reached. `querySync` on a dead relay returns an
+ * empty list, indistinguishable from an empty relay, and "0 entries" is a
+ * misleading thing to report when the truth is "nothing answered". Check
+ * first, and say so.
+ */
+export async function checkRelays(pool, relays = RELAYS) {
+  const reachable = []
+  const unreachable = []
+  await Promise.all(
+    relays.map(async (url) => {
+      try {
+        await pool.ensureRelay(url, { connectionTimeout: 4000 })
+        reachable.push(url)
+      } catch {
+        unreachable.push(url)
+      }
+    }),
+  )
+  return { reachable, unreachable }
+}
+
+/**
+ * Exit unless at least one relay answers, naming the ones that didn't.
+ * Every script that reads or publishes calls this first.
+ */
+export async function requireRelays(pool, relays = RELAYS) {
+  const { reachable, unreachable } = await checkRelays(pool, relays)
+  for (const url of unreachable) console.error(`! ${url} is not reachable`)
+  if (reachable.length === 0) {
+    console.error(
+      `\nNo relay answered. ${relays.length === 1 ? 'Is it running?' : 'Are they running?'} ` +
+        'Nothing read, nothing published.',
+    )
+    process.exit(1)
+  }
+  return reachable
 }
 
 /**

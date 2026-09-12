@@ -18,11 +18,12 @@ import {
   verifyCuratedCanonical,
   verifyCuratedSuggestion,
 } from '../lib/nostr/curatedSchemaEvent.ts'
-import { RELAYS as READ_RELAYS, describeRelays, done, loadSchema } from './lib.mjs'
+import { RELAYS as READ_RELAYS, describeRelays, done, loadSchema, requireRelays } from './lib.mjs'
 
 async function main() {
   const pool = new SimplePool()
   console.log(`Reading ${describeRelays()}…\n`)
+  await requireRelays(pool, READ_RELAYS)
 
   // A schema published to the relay wins over the bundled one — that is the
   // whole point of putting it on Nostr. Fall back when there isn't one.

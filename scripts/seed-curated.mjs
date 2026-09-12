@@ -10,6 +10,7 @@
  *   npm run seed:curated -- --dry-run     # no key needed, nothing signed
  *   NOSTR_NSEC=nsec1... npm run seed:curated
  *   NOSTR_NSEC=nsec1... npm run seed:curated -- --count=12   # leave some pending
+ *   NOSTR_NPUB=npub1... npm run --silent seed:curated > canonical.jsonl   # sign elsewhere
  *
  * One curated entry per *film*, not per suggestion: several people may have
  * suggested the same title, and they share a `d`, so curating each in turn
@@ -19,7 +20,7 @@
  * Curated entries keep the suggestion's `d`, so re-running revises them rather
  * than piling up duplicates.
  */
-import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
+import { finalizeEvent } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import {
   CURATED_CANONICAL_KIND,
@@ -39,7 +40,10 @@ import {
   loadSchema,
   nip19,
   publish,
-  readSecretKey,
+  requireRelays,
+  readSigner,
+  emitUnsigned,
+  say,
   short,
 } from './lib.mjs'
 
@@ -50,6 +54,7 @@ async function main() {
   const limit = intFlag('count', 0)
 
   const pool = new SimplePool()
+  await requireRelays(pool)
   const { schema, published } = await loadSchema(pool)
   const address = curatedSchemaAddress(schema)
 
@@ -62,14 +67,14 @@ async function main() {
       '  NOSTR_NSEC=nsec1... npm run seed:schema\n' +
       '  npm run seed:suggestions\n' +
       '  NOSTR_NSEC=nsec1... npm run seed:curated\n'
-    if (dryRun) console.log(`${message}\nNothing to preview yet.`)
+    if (dryRun) say(`${message}\nNothing to preview yet.`)
     else console.error(message)
     done(pool, dryRun ? 0 : 1)
     return
   }
 
-  console.log(`Curating for ${address}`)
-  console.log(`  curator: ${short(schema.namespace)}\n`)
+  say(`Curating for ${address}`)
+  say(`  curator: ${short(schema.namespace)}\n`)
 
   const [suggestions, curations] = await Promise.all([
     pool.querySync(RELAYS, { kinds: [schema.kind], '#a': [address], limit: 1000 }),
@@ -86,7 +91,7 @@ async function main() {
 
   if (eligible.length === 0) {
     const message = 'No valid suggestions to curate. Run `npm run seed:suggestions` first.'
-    if (dryRun) console.log(message)
+    if (dryRun) say(message)
     else console.error(message)
     done(pool, dryRun ? 0 : 1)
     return
@@ -106,7 +111,7 @@ async function main() {
   const ordered = [...byFilm.values()].sort((a, b) => a.d.localeCompare(b.d))
   const picked = limit > 0 ? ordered.slice(0, limit) : ordered
 
-  console.log(
+  say(
     `${rows.length} suggestions of ${byFilm.size} films ` +
       `(${invalid} invalid, ${rows.filter((r) => r.done).length} already curated).\n` +
       `Curating ${picked.length}${limit > 0 ? ` of ${byFilm.size}` : ' (all)'}.`,
@@ -123,15 +128,14 @@ async function main() {
   }))
 
   if (dryRun) {
-    console.log(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
+    say(`\nDRY RUN — ${templates.length} kind ${CURATED_CANONICAL_KIND} events:\n`)
     for (const { template } of templates) console.log(JSON.stringify(template))
-    console.log('\nNo key used, nothing published.')
+    say('\nNo key used, nothing published.')
     done(pool)
     return
   }
 
-  const sk = readSecretKey('npm run seed:curated')
-  const pubkey = getPublicKey(sk)
+  const { pubkey, sk, canSign } = readSigner('npm run seed:curated')
   if (pubkey !== schema.namespace) {
     console.error(
       `\nThat key is ${short(pubkey)}, but this schema was published by ` +
@@ -141,26 +145,46 @@ async function main() {
     return
   }
 
-  console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
-  console.log(`Publishing to ${describeRelays()}…\n`)
+  if (!canSign) {
+    // Unsigned mode: every canonical event, pubkey set, one per line on
+    // stdout. They still go through the verifier first — an event that
+    // wouldn't be accepted isn't worth anyone's signature.
+    say(`\nUnsigned kind ${CURATED_CANONICAL_KIND} events for ${nip19.npubEncode(pubkey)} → stdout\n`)
+    let emitted = 0
+    for (const { row, template } of templates) {
+      const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
+      if (!check.ok) {
+        say(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
+        continue
+      }
+      emitUnsigned(template, pubkey)
+      emitted += 1
+    }
+    say(`\n${emitted} unsigned events. Sign and publish them to ${describeRelays()}. Nothing was published.`)
+    done(pool)
+    return
+  }
+
+  say(`\nSigning as ${nip19.npubEncode(pubkey)}`)
+  say(`Publishing to ${describeRelays()}…\n`)
 
   let ok = 0
   for (const { row, template } of templates) {
     const check = verifyCuratedCanonical({ ...template, pubkey }, schema)
     if (!check.ok) {
-      console.log(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
+      say(`✗ ${row.title} — ${check.violations.map((v) => v.message).join('; ')}`)
       continue
     }
     const event = finalizeEvent(template, sk)
     const accepted = await publish(pool, event)
     if (accepted > 0) ok += 1
-    console.log(
+    say(
       `${accepted > 0 ? '✓' : '✗'} ${row.title} — ${accepted}/${RELAYS.length} relays ` +
         `(from ${short(row.event.pubkey)})`,
     )
   }
 
-  console.log(`\nDone: ${ok}/${templates.length} curated.`)
+  say(`\nDone: ${ok}/${templates.length} curated.`)
   done(pool, ok === templates.length ? 0 : 1)
 }
 

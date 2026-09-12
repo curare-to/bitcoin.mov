@@ -22,6 +22,10 @@
  *   # Publish it (also runs as step 1 of `npm run seed`):
  *   NOSTR_NSEC=nsec1... npm run schema
  *
+ *   # Or keep the key elsewhere: give only the npub and the unsigned event is
+ *   # printed to stdout for you to sign and publish yourself.
+ *   NOSTR_NPUB=npub1... npm run --silent schema > schema.json
+ *
  *   # Restrict who may submit (default is public):
  *   NOSTR_NSEC=nsec1... npm run schema -- --visibility=closed --author=<hex pubkey>
  *
@@ -37,10 +41,10 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative } from 'node:path'
-import { finalizeEvent, getPublicKey } from 'nostr-tools/pure'
+import { finalizeEvent } from 'nostr-tools/pure'
 import { SimplePool } from 'nostr-tools/pool'
 import * as nip19 from 'nostr-tools/nip19'
-import { RELAYS, describeRelays, publish } from './lib.mjs'
+import { RELAYS, describeRelays, emitUnsigned, publish, readSigner, say } from './lib.mjs'
 import {
   DEFAULT_CURATED_SCHEMA,
   CURATED_SCHEMA_CAP,
@@ -155,36 +159,36 @@ function resolveSchema() {
 
 /** Human-readable summary of what the schema asks users for. */
 function printSchema(schema) {
-  console.log(`Schema "${schema.identifier}" — ${schema.title}`)
-  console.log(`  shown as:   ${curatedSchemaDisplayName(schema)}`)
-  console.log(
+  say(`Schema "${schema.identifier}" — ${schema.title}`)
+  say(`  shown as:   ${curatedSchemaDisplayName(schema)}`)
+  say(
     `  name:       ${schema.name}` +
       (schema.domain ? '  (overridden by the domain above)' : ''),
   )
   if (schema.domain) {
-    console.log(`  domain:     ${schema.domain}  — unverified claim; see verifyDomain()`)
+    say(`  domain:     ${schema.domain}  — unverified claim; see verifyDomain()`)
   }
-  if (schema.profileImageUrl) console.log(`  picture:    ${schema.profileImageUrl}`)
-  console.log(`  about:      ${schema.description}`)
-  console.log(`  governs kind ${schema.kind}, visibility: ${schema.visibility}`)
-  console.log(`  relays:     ${schema.relays.join(', ') || '(none — clients will use their own)'}`)
+  if (schema.profileImageUrl) say(`  picture:    ${schema.profileImageUrl}`)
+  say(`  about:      ${schema.description}`)
+  say(`  governs kind ${schema.kind}, visibility: ${schema.visibility}`)
+  say(`  relays:     ${schema.relays.join(', ') || '(none — clients will use their own)'}`)
   if (schema.authors.length > 0) {
-    console.log(`  extra authors allowed: ${schema.authors.length}`)
+    say(`  extra authors allowed: ${schema.authors.length}`)
   }
-  console.log()
-  console.log(
+  say()
+  say(
     `  ${'FIELD'.padEnd(18)}${'TAG'.padEnd(10)}${'TYPE'.padEnd(10)}${'REQUIRED'.padEnd(14)}PLACEHOLDER`,
   )
   for (const f of schema.fields) {
     const required = f.required ? 'yes' : 'no'
     const tag = fieldTag(f) + (f.config.marker ? `:${f.config.marker}` : '')
     const note = f.config.derived ? ' (derived)' : ''
-    console.log(
+    say(
       `  ${f.name.padEnd(18)}${tag.padEnd(10)}${f.type.padEnd(10)}${(required + note).padEnd(14)}${f.placeholder}`,
     )
   }
   for (const group of schema.requireAny) {
-    console.log(`\n  at least one of: ${group.join(', ')}`)
+    say(`\n  at least one of: ${group.join(', ')}`)
   }
 }
 
@@ -221,32 +225,28 @@ async function main() {
   printSchema(schema)
 
   if (dryRun) {
-    console.log(`\nDRY RUN — kind ${CURATED_SCHEMA_KIND} event:\n`)
+    say(`\nDRY RUN — kind ${CURATED_SCHEMA_KIND} event:\n`)
     console.log(JSON.stringify(template, null, 2))
-    console.log('\nNo key used, nothing published. Re-run without --dry-run to publish.')
+    say('\nNo key used, nothing published. Re-run without --dry-run to publish.')
     return
   }
 
-  const nsec = process.env.NOSTR_NSEC
-  if (!nsec) {
-    console.error(
-      '\nMissing NOSTR_NSEC. Run:\n  NOSTR_NSEC=nsec1... npm run schema\n' +
-        'Or preview first with:  npm run schema:dry',
+  const { pubkey, sk, canSign } = readSigner('npm run schema')
+
+  if (!canSign) {
+    // Unsigned mode: the event, with the curator's pubkey set, for signing
+    // elsewhere. The well-known file needs the *signed* event, so once it is
+    // signed, the signed event itself is what goes there — nothing else.
+    say(`\nUnsigned kind ${CURATED_SCHEMA_KIND} event for ${nip19.npubEncode(pubkey)} → stdout`)
+    emitUnsigned(template, pubkey)
+    say(
+      '\nSign it, publish it to the relays it names, and save the signed event as\n' +
+        `  ${WELL_KNOWN.join('/')}\n` +
+        'Nothing was published.',
     )
-    process.exit(1)
+    return
   }
 
-  let sk
-  try {
-    const decoded = nip19.decode(nsec.trim())
-    if (decoded.type !== 'nsec') throw new Error('not an nsec')
-    sk = decoded.data
-  } catch {
-    console.error('NOSTR_NSEC is not a valid nsec1… key.')
-    process.exit(1)
-  }
-
-  const pubkey = getPublicKey(sk)
   const event = finalizeEvent(template, sk)
 
   // Round-trip check: what a client reads back must be what we meant to say.
@@ -257,28 +257,28 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`\nSigning as ${nip19.npubEncode(pubkey)}`)
+  say(`\nSigning as ${nip19.npubEncode(pubkey)}`)
 
   // Before publishing: whether relays accept it has no bearing on the site
   // being able to serve it.
   const { path: written, fresh } = await writeWellKnown(event)
-  console.log(`Wrote ${relative(repoRoot, written)}`)
-  console.log('  → /.well-known/curare.to/nostr.json once deployed')
+  say(`Wrote ${relative(repoRoot, written)}`)
+  say('  → /.well-known/curare.to/nostr.json once deployed')
   if (fresh) {
-    console.log('  ! public/ did not exist — restart `npm run dev` to serve it')
+    say('  ! public/ did not exist — restart `npm run dev` to serve it')
   }
-  console.log()
+  say()
 
-  console.log(`Publishing schema to ${describeRelays()}…\n`)
+  say(`Publishing schema to ${describeRelays()}…\n`)
 
   const pool = new SimplePool()
   const accepted = await publish(pool, event, WRITE_RELAYS)
-  console.log(
+  say(
     `${accepted > 0 ? '✓' : '✗'} ${schema.identifier} — ${accepted}/${WRITE_RELAYS.length} relays`,
   )
 
   if (accepted > 0) {
-    console.log(
+    say(
       `\nCoordinate: ${CURATED_SCHEMA_KIND}:${pubkey}:${schema.identifier}\n\n` +
         'Next:\n' +
         '  1. Commit public/.well-known/curare.to/nostr.json — the app reads the\n' +

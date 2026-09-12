@@ -17,6 +17,14 @@
  *   npm run seed:dry                  # preview all three, nothing signed
  *   NOSTR_NSEC=nsec1... npm run seed
  *
+ * To keep the key out of it entirely, give only the npub. Steps 1 and 3 then
+ * print their events unsigned to stdout instead of signing and publishing —
+ * step 2 still publishes, since its authors are generated keys — and all
+ * narration goes to stderr, so this captures exactly the events you need to
+ * sign:
+ *
+ *   NOSTR_NPUB=npub1... npm run --silent seed > to-sign.jsonl
+ *
  * Every step is idempotent: all three kinds are addressable and the generated
  * authors are derived from a fixed salt, so re-running replaces rather than
  * duplicates.
@@ -24,6 +32,7 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { UNSIGNED, say } from './lib.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const args = process.argv.slice(2)
@@ -35,7 +44,7 @@ const STEPS = [
 ]
 
 for (const [label, script] of STEPS) {
-  console.log(`\n${'─'.repeat(60)}\n${label}\n${'─'.repeat(60)}`)
+  say(`\n${'─'.repeat(60)}\n${label}\n${'─'.repeat(60)}`)
   const result = spawnSync(
     process.execPath,
     ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', join(here, script), ...args],
@@ -47,9 +56,12 @@ for (const [label, script] of STEPS) {
   }
 }
 
-console.log(
+say(
   `\n${'─'.repeat(60)}\n` +
     (args.includes('--dry-run')
       ? 'Previewed. Nothing was signed or published.'
-      : 'Seeded. Check it with:  npm run verify'),
+      : UNSIGNED
+        ? 'Unsigned events are on stdout. Sign and publish them, save the signed\n' +
+          'schema as public/.well-known/curare.to/nostr.json, then: npm run verify'
+        : 'Seeded. Check it with:  npm run verify'),
 )

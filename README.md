@@ -71,6 +71,7 @@ worked examples straight out of the seeded library:
 ```bash
 npm run seed:dry     # preview all three seed steps, nothing signed
 npm run seed         # NOSTR_NSEC=nsec1… — schema, suggestions, curated entries
+                     # NOSTR_NPUB=npub1… instead → unsigned events on stdout, sign elsewhere
 npm run schema       # publish just the schema  (= npm run seed:schema)
 npm run curate       # what's been suggested, what's still pending
 npm run verify       # check every entry on a relay against the schema

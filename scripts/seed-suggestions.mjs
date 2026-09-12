@@ -38,6 +38,8 @@ import {
   intFlag,
   loadSchema,
   publish,
+  requireRelays,
+  say,
   seededAuthors,
   short,
 } from './lib.mjs'
@@ -84,24 +86,28 @@ async function main() {
   const films = JSON.parse(raw)
 
   const pool = new SimplePool()
-  const { schema, published } = await loadSchema(pool)
+  await requireRelays(pool)
+  const { schema, published, assumed } = await loadSchema(pool)
 
-  if (!published) {
+  if (!published && !assumed) {
     const message =
-      `No kind 31889 schema on the relay. Publish it first:\n\n` +
-      `  NOSTR_NSEC=nsec1... npm run seed:schema\n`
+      `No kind 31889 schema on the relay, and no curator in the environment.\n` +
+      `Publish the schema first:\n\n` +
+      `  NOSTR_NSEC=nsec1... npm run seed:schema\n\n` +
+      `or name the curator so the reply coordinate is known before it exists:\n\n` +
+      `  NOSTR_NPUB=npub1... npm run seed:suggestions\n`
     if (!dryRun) {
       console.error(message)
       done(pool, 1)
       return
     }
-    console.log(
+    say(
       `${message}\nPreviewing against the bundled schema instead — suggestions ` +
         `carry no reply\ntags until there is a schema to reply to.\n`,
     )
   } else {
-    console.log(`Replying to ${curatedSchemaAddress(schema)}`)
-    console.log(`  curator: ${short(schema.namespace)}\n`)
+    say(`Replying to ${curatedSchemaAddress(schema)}`)
+    say(`  curator: ${short(schema.namespace)}` + (assumed ? '  (from the environment — schema not on the relay yet)' : '') + '\n')
   }
 
   const authors = seededAuthors(salt, authorCount)
@@ -129,35 +135,35 @@ async function main() {
     return
   }
 
-  console.log(
+  say(
     `✓ ${built.length} suggestions from ${authors.length} authors ` +
       `(${films.length} films + ${built.length - films.length} second opinions).`,
   )
 
   if (dryRun) {
-    console.log(`\nDRY RUN — ${built.length} kind ${schema.kind} events:\n`)
+    say(`\nDRY RUN — ${built.length} kind ${schema.kind} events:\n`)
     for (const row of built) {
       console.log(`${short(row.author.pubkey)}  ${JSON.stringify(row.template)}`)
     }
-    console.log('\nNothing signed, nothing published.')
+    say('\nNothing signed, nothing published.')
     done(pool)
     return
   }
 
-  console.log(`\nPublishing to ${describeRelays()}…\n`)
+  say(`\nPublishing to ${describeRelays()}…\n`)
   let ok = 0
   for (const row of built) {
     const event = finalizeEvent(row.template, row.author.sk)
     const accepted = await publish(pool, event)
     if (accepted > 0) ok += 1
-    console.log(
+    say(
       `${accepted > 0 ? '✓' : '✗'} ${short(row.author.pubkey)} ` +
         `${row.film.title} — ${accepted}/${RELAYS.length} relays`,
     )
   }
 
-  console.log(`\nDone: ${ok}/${built.length} suggestions published.`)
-  console.log('Next:  NOSTR_NSEC=nsec1... npm run seed:curated')
+  say(`\nDone: ${ok}/${built.length} suggestions published.`)
+  say('Next:  NOSTR_NSEC=nsec1... npm run seed:curated')
   done(pool, ok === built.length ? 0 : 1)
 }
 

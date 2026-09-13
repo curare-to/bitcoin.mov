@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { VideoBrowser } from '@/components/VideoBrowser'
 import { FilmReel } from '@/components/FilmReel'
+import { UnlockSubscriptions } from '@/components/UnlockSubscriptions'
 
 export default function HomePage() {
   return (
@@ -53,6 +54,8 @@ export default function HomePage() {
       </section>
 
         <VideoBrowser />
+
+        <UnlockSubscriptions />
       </div>
     </>
   )

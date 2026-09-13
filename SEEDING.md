@@ -191,10 +191,18 @@ deploying it is mostly a matter of pointing it somewhere real. In order:
    on the relay must all come from a `npm run seed` with that key. A schema
    published under another key is ignored — `npm run verify` will point it out.
 5. **Enable Pages.** Settings → Pages → Source: *GitHub Actions*. The workflow
-   in `.github/workflows/pages.yml` deploys on push to `main`.
-6. **Sub-path or domain?** Under `user.github.io/repo` set
-   `NEXT_PUBLIC_BASE_PATH=/repo` in the workflow's build step; under a custom
-   domain leave it unset and add the domain in Settings → Pages.
+   in `.github/workflows/pages.yml` deploys on push to `bitcoin.mov`.
+6. **Domain.** The site is `https://bitcoin.mov`, so `NEXT_PUBLIC_BASE_PATH`
+   stays unset in the workflow (it's only for `user.github.io/repo`). At the
+   registrar, point the apex at GitHub Pages — A records `185.199.108.153`,
+   `185.199.109.153`, `185.199.110.153`, `185.199.111.153` and AAAA
+   `2606:50c0:8000::153` through `2606:50c0:8003::153` — and optionally `www`
+   as a CNAME to `curare-to.github.io` (GitHub redirects it to the apex). Then
+   Settings → Pages → Custom domain: `bitcoin.mov`, wait for the DNS check,
+   and tick *Enforce HTTPS* once the certificate is issued (up to 24h). No
+   `CNAME` file goes in the repo: GitHub ignores it for Actions deploys.
+   Verify the domain under the organisation's Settings → Pages so no other
+   repository can claim it.
 
 `public/.nojekyll` is already there: without it GitHub's Jekyll pass silently
 drops every `_`- and `.`-prefixed path — which is `_next/` (all the JS) and

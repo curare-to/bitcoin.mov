@@ -26,8 +26,12 @@ npm run build    # emits a static site to ./out
 npm run serve    # preview the static build locally
 ```
 
-For a GitHub Pages sub-path deploy, uncomment `basePath`/`assetPrefix` in
-[`next.config.mjs`](next.config.mjs).
+The live site is **https://bitcoin.mov**, served by GitHub Pages: the workflow
+in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) builds and
+deploys on every push to `bitcoin.mov`. The domain is set under Settings →
+Pages (no `CNAME` file — GitHub ignores it for Actions deploys), so nothing in
+the build knows about it. To host under a sub-path instead
+(`https://user.github.io/repo`), build with `NEXT_PUBLIC_BASE_PATH=/repo`.
 
 ## Three events
 

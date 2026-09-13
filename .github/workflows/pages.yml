@@ -8,7 +8,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [bitcoin.mov]
   workflow_dispatch:
 
 permissions:
@@ -35,8 +35,9 @@ jobs:
 
       - run: npm ci
 
-      # Set NEXT_PUBLIC_BASE_PATH here only if the site lives under a sub-path
-      # (https://user.github.io/repo). Leave it unset for a custom domain.
+      # The site lives at https://bitcoin.mov (Settings → Pages → Custom domain),
+      # so NEXT_PUBLIC_BASE_PATH stays unset. It is only needed under a sub-path
+      # such as https://user.github.io/repo.
       - run: npm run build
         env:
           NODE_ENV: production

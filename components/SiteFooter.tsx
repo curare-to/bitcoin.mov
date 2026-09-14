@@ -17,6 +17,14 @@ export function SiteFooter() {
           <Link href="/submit" className="hover:text-[var(--color-text)]">
             Submit
           </Link>
+          <a
+            href="https://github.com/curare-to/bitcoin.mov"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[var(--color-text)]"
+          >
+            GitHub
+          </a>
         </div>
       </div>
 

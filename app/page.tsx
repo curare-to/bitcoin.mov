@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { VideoBrowser } from '@/components/VideoBrowser'
 import { FilmReel } from '@/components/FilmReel'
-import { UnlockSubscriptions } from '@/components/UnlockSubscriptions'
+import { BlinkPaywall } from '@/components/BlinkPaywall'
 
 export default function HomePage() {
   return (
@@ -55,7 +55,7 @@ export default function HomePage() {
 
         <VideoBrowser />
 
-        <UnlockSubscriptions />
+        <BlinkPaywall />
       </div>
     </>
   )

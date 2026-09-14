@@ -53,7 +53,7 @@ export function BlinkPaywall() {
         ref={hostRef}
         data-blink-paywall=""
         data-username="catalyst"
-        data-amount="21"
+        data-amount="121256"
         data-currency="sats"
         data-id="what-s-next"
         data-title="What's Next?"
